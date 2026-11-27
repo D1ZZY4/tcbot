@@ -10,6 +10,8 @@ import asyncio
 import re
 from typing import TYPE_CHECKING
 
+from pyrogram.errors import ChatWriteForbidden
+
 from tcbot.database import engine as db_engine
 from tcbot.modules.helper.pipelines.errors.exceptions import (
     PollingConflictError,
@@ -18,6 +20,7 @@ from tcbot.modules.helper.pipelines.errors.exceptions import (
     is_invalid_button_user,
     is_mtproto_auth_error,
     is_owner_only,
+    is_permission_denial,
     is_rate_limit,
     is_rpc_error,
     is_telegram_timeout,
@@ -50,7 +53,7 @@ _LOG_NOISE_RE = re.compile(r"\[[^]]+\] uid=\S+ raised after [\d.]+ms")
 # * Durable delivery records store the Telegram refusal as text and rebuild an
 # * exception for the operator report. Without this match, every missing-right
 # * refusal is labelled a code bug and tells the operator to read the source.
-_TELEGRAM_RPC_TEXT_RE = re.compile(r"\[\s*(\d{3})\s+([A-Z][A-Z0-9_]*)\s*\]")
+_TELEGRAM_RPC_TEXT_RE = re.compile(r"\[\s*(\d{3})\s+([A-Za-z][A-Za-z0-9_]*)\s*\]")
 
 
 def _benign(exc: BaseException | None) -> bool:
@@ -113,6 +116,11 @@ _ACTION_HINTS: tuple[tuple[str, str], ...] = (
         "The bot cannot post in this chat; check its member permissions and "
         "restriction state instead of re-promoting it.",
     ),
+    (
+        "Permission Denied",
+        "The bot lacks the admin right this action needs; you must re-promote "
+        "the bot in the target chat. Retrying the same call cannot fix it.",
+    ),
     ("Forbidden", "Client lacks admin rights in the target chat; re-promote it."),
     (
         "User Profile Button",
@@ -147,13 +155,20 @@ def _stored_telegram_label(exc: BaseException) -> str | None:
     if match is None:
         return None
     code = int(match.group(1))
+    upper = str(exc).upper()
+    normalized = "".join(ch for ch in upper if ch.isalnum())
+    permission = any(
+        marker in normalized
+        for marker in ("CHATADMINREQUIRED", "NOTENOUGHRIGHTS", "RIGHTFORBIDDEN")
+    )
+    # * Kurigram's live ChatWriteForbidden is a 400, while older ledger text
+    # * can carry a 403. Both mean the bot cannot post in that chat, and
+    # * re-promoting it would not fix the condition.
+    if code in (400, 403) and "CHATWRITEFORBIDDEN" in normalized:
+        return "[!] Telegram Chat Write Forbidden"
     if code == 403:
-        # * A write refusal is not a missing admin right: Telegram answered
-        # * with a 403 because the acting account cannot post in that chat.
-        # * Re-promoting the bot would not fix it, so the operator hint must
-        # * name the actual condition.
-        if "CHAT_WRITE_FORBIDDEN" in str(exc).upper():
-            return "[!] Telegram Chat Write Forbidden"
+        if permission:
+            return "[!] Telegram Permission Denied"
         return "[!] Telegram Forbidden"
     if code == 420:
         # * Kurigram's flood RPCs are code 420; 429 is a transport error that
@@ -162,6 +177,8 @@ def _stored_telegram_label(exc: BaseException) -> str | None:
     if code == 401:
         return "[!] Telegram Invalid Token"
     if code == 400:
+        if permission:
+            return "[!] Telegram Permission Denied"
         return "[!] Telegram Bad Request"
     return "[!] Telegram API Error"
 
@@ -195,6 +212,16 @@ def _classify(exc: BaseException | None) -> str:
         return "[~] Polling Conflict"
     if is_invalid_button_user(exc):
         return "[!] Telegram User Profile Button Invalid"
+    # * A write refusal has its own guidance: re-promoting the bot would not
+    # * fix a chat-level posting restriction. Keep it separate from a missing
+    # * admin right whether the refusal is live or rebuilt from the ledger.
+    if isinstance(exc, ChatWriteForbidden):
+        return "[!] Telegram Chat Write Forbidden"
+    # * Missing rights arrive as either 400 BadRequest or 403 Forbidden in
+    # * Kurigram. Classify by the condition, so an operator restores the right
+    # * instead of checking call arguments.
+    if is_permission_denial(exc):
+        return "[!] Telegram Permission Denied"
     stored_label = _stored_telegram_label(exc)
     if stored_label is not None:
         return stored_label

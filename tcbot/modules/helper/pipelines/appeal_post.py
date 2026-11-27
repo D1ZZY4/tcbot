@@ -141,7 +141,9 @@ async def post_appeal(
             log.error("Appeal review copy to APPEALS failed: %s", rv_appeals)
         else:
             appeals_review_id = rv_appeals.id
-        if isinstance(markup, BaseException):
+        if markup is False or isinstance(markup, BaseException):
+            # * A gone target returns False, not an exception. Without this
+            # * branch the card id stays recorded and the appeal has no buttons.
             log.error("Appeal review keyboard attach failed: %s", markup)
             for chat_id, message_id in (
                 (cfg.main_group, review_msg_id),

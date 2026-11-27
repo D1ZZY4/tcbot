@@ -23,6 +23,7 @@ from pyrogram.types import ChatPermissions
 from tcbot import database as db
 from tcbot.database.types import as_int
 from tcbot.modules.helper.pipelines.demote_actions import demote_before_enforcement
+from tcbot.modules.helper.pipelines.errors.exceptions import flood_wait_delay
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.circuit_breaker import CircuitState
 from tcbot.utils.dispatch import (
@@ -380,8 +381,30 @@ async def _process_run(
             )
             if chunk_size <= 0:
                 break
-        targets = await db.enforcement_ledger.claim_targets(run_id, chunk_size)
+        # * Reserve admission before the claim. Claiming charges one of the
+        # * target's three attempts, so a circuit that opens during the claim
+        # * await must not leave those slots skipped with no Telegram call.
+        admitted = probe_reserved
+        if not admitted:
+            for _ in range(chunk_size):
+                if not _cb.telegram.try_acquire():
+                    break
+            else:
+                admitted = True
+        if not admitted:
+            break
+        # * A reservation with no claimed target never reaches a fan-out slot,
+        # * so this worker must settle it. A probe reserved by the caller
+        # * belongs to that caller and is released in its own finally block.
+        try:
+            targets = await db.enforcement_ledger.claim_targets(run_id, chunk_size)
+        except BaseException:
+            if admitted and not probe_reserved:
+                _cb.telegram.release_probe()
+            raise
         if not targets:
+            if admitted and not probe_reserved:
+                _cb.telegram.release_probe()
             if not results:
                 # * A repair with no claimable target is not a successful
                 # * unban: the chat may be disconnected, so the record stays
@@ -399,12 +422,12 @@ async def _process_run(
             )
             for target in targets
         ]
-        # * The caller reserved the recovery probe before claiming the run.
-        # * Pass that fact down so the slot does not reject its own probe.
-        if probe_reserved:
-            chunk_results = await fan_out(coros, probe_reserved=True)
-        else:
-            chunk_results = await fan_out(coros)
+        # * Admission was reserved before the claim, so no slot may reject
+        # * itself after its attempt was already charged. The probe owner is
+        # * passed through for the same reason.
+        chunk_results = await fan_out(
+            coros, probe_reserved=probe_reserved, admission_reserved=admitted
+        )
         throw_if_cancelled(chunk_results)
         updates = [
             _record_target(target, result)
@@ -578,6 +601,11 @@ async def _record_target(target: dict[str, object], result: object) -> None:
         return
     detail = str(result)
     retry = attempts < _MAX_ATTEMPTS
+    # * Retry at the deadline Telegram asked for. A fixed five-minute wait can
+    # * spend the whole attempt budget before a long flood cooldown expires.
+    delay = (
+        flood_wait_delay(result) if isinstance(result, BaseException) else None
+    ) or _RETRY_DELAY
     # * The target trigger only accepts in_progress -> succeeded|skipped|failed.
     # * A retry is a failed attempt with a due deadline, not a return to
     # * pending; writing pending here aborts the attempt insert and strands
@@ -588,5 +616,5 @@ async def _record_target(target: dict[str, object], result: object) -> None:
         outcome="failed",
         error_kind=type(result).__name__ if isinstance(result, BaseException) else None,
         error_detail=detail,
-        retry_after=_RETRY_DELAY if retry else None,
+        retry_after=delay if retry else None,
     )

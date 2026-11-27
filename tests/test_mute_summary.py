@@ -55,7 +55,7 @@ def test_a_partial_mute_names_the_failed_groups(
     async def _demote(*args: Any, **kwargs: Any) -> None:
         return None
 
-    async def _fan_out(coros: Any) -> list[object]:
+    async def _fan_out(coros: Any, **_kwargs: Any) -> list[object]:
         for coro in coros:
             coro.close()
         return [None, RuntimeError("chat not found")]

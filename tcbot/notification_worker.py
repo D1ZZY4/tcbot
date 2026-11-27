@@ -16,6 +16,7 @@ from tcbot import database as db
 from tcbot.database.types import as_int
 from tcbot.modules.helper.pipelines.errors.exceptions import (
     TRANSPORT_TIMEOUT_ERRORS,
+    flood_wait_delay,
     is_bad_request,
     is_forbidden,
     is_invalid_button_user,
@@ -24,7 +25,11 @@ from tcbot.modules.helper.rich.block import html_message
 from tcbot.modules.helper.rich.edit_msg import edit_rich
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.circuit_breaker import CircuitState
-from tcbot.utils.dispatch import is_edit_not_modified_error, is_edit_target_gone_error
+from tcbot.utils.dispatch import (
+    is_edit_not_modified_error,
+    is_edit_target_gone_error,
+    is_permanent_telegram_error,
+)
 from tcbot.utils.i18n import resolve_locale, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import TELEGRAM_ACTION_TIMEOUT
@@ -185,9 +190,19 @@ async def _group_locale(chat_id: int) -> str:
     except Exception as exc:
         log.debug("Notification locale read failed for %d: %s", chat_id, exc)
         group_locale = None
+    try:
+        community_locale = await db.settings_db.get_community_locale()
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug("Community locale read failed: %s", exc)
+        community_locale = None
     return resolve_locale(
         chat_type="supergroup",
         group_locale=group_locale if isinstance(group_locale, str) else None,
+        community_locale=community_locale
+        if isinstance(community_locale, str)
+        else None,
     )
 
 
@@ -284,6 +299,16 @@ async def _process_task(
                 _cb.telegram.record_failure()
             else:
                 _cb.telegram.release_probe(reached_service=True)
+            if is_permanent_telegram_error(exc):
+                # * Missing rights or lost membership cannot recover on retry.
+                # * Terminalize the card so an operator can see why it stayed
+                # * closed instead of spending five more edits on the same refusal.
+                await _complete(
+                    state="failed",
+                    error=str(exc),
+                    expected_attempts=attempts,
+                )
+                return
             if (
                 is_forbidden(exc)
                 or is_invalid_button_user(exc)
@@ -313,6 +338,10 @@ async def _process_task(
                     )
                 return
             retry = attempts < _MAX_ATTEMPTS
+            # * Telegram's flood wait is the deadline for the next attempt.
+            # * A fixed five-minute retry would exhaust the budget before the
+            # * requested cooldown ends and turn a rate limit into a failure.
+            delay = flood_wait_delay(exc) or _RETRY_DELAY
             log.warning(
                 "Review-card edit failed for action=%d chat=%d message=%d "
                 "(attempt %d/%d): %s",
@@ -326,7 +355,7 @@ async def _process_task(
             await _complete(
                 state="failed" if not retry else "pending",
                 error=str(exc),
-                retry_after=_RETRY_DELAY if retry else None,
+                retry_after=delay if retry else None,
                 expected_attempts=attempts,
             )
             return

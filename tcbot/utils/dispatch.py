@@ -120,6 +120,7 @@ async def fan_out[T](
     *,
     max_concurrent: int = _MAX_CONCURRENT,
     probe_reserved: bool = False,
+    admission_reserved: bool = False,
 ) -> list[T | BaseException]:
     """Run coros concurrently up to max_concurrent at once.
 
@@ -142,6 +143,12 @@ async def fan_out[T](
     own reservation because the caller holds it; the usual outcome handling
     still settles the breaker. Every other caller remains blocked while that
     probe is in flight.
+
+    ``admission_reserved`` tells the slots that the caller checked admission
+    before claiming work whose attempt counter starts at claim time. It must
+    only be set after that check: it deliberately lets those calls through a
+    circuit that opens while the claim was in flight, so a skipped slot cannot
+    spend an attempt without ever reaching Telegram.
     """
     if not coros:
         if probe_reserved:
@@ -163,7 +170,10 @@ async def fan_out[T](
         thunk: Callable[[], Awaitable[T]], coro: Awaitable[T]
     ) -> T | BaseException:
         async with sem:
-            if not probe_reserved and not _cb.telegram.try_acquire():
+            if (
+                not (probe_reserved or admission_reserved)
+                and not _cb.telegram.try_acquire()
+            ):
                 skipped = thunk()
                 if inspect.iscoroutine(skipped):
                     skipped.close()
@@ -361,6 +371,16 @@ def is_permanent_telegram_error(exc: BaseException) -> bool:
     return False
 
 
+def is_circuit_skip(exc: BaseException) -> bool:
+    """Return True when a fan-out slot was skipped without a Telegram call.
+
+    A skip is neither a delivery nor a Telegram refusal. Counting it as a
+    transient failure would describe an outage as a failed group and attach a
+    circuit error to operator summaries.
+    """
+    return isinstance(exc, _cb.CircuitOpenError)
+
+
 def count_transient_errors(results: Sequence[object]) -> int:
     """Count fan_out results that represent real (non-benign) failures.
 
@@ -372,7 +392,9 @@ def count_transient_errors(results: Sequence[object]) -> int:
     return sum(
         1
         for r in results
-        if isinstance(r, BaseException) and not is_benign_telegram_error(r)
+        if isinstance(r, BaseException)
+        and not is_benign_telegram_error(r)
+        and not is_circuit_skip(r)
     )
 
 
@@ -406,7 +428,7 @@ def transient_groups(
     return [
         (grp, exc)
         for grp, exc in failed_groups(groups, results)
-        if not is_benign_telegram_error(exc)
+        if not is_benign_telegram_error(exc) and not is_circuit_skip(exc)
     ]
 
 
@@ -421,7 +443,11 @@ def first_transient_error(results: Sequence[object]) -> BaseException | None:
     failures.
     """
     for r in results:
-        if isinstance(r, BaseException) and not is_benign_telegram_error(r):
+        if (
+            isinstance(r, BaseException)
+            and not is_benign_telegram_error(r)
+            and not is_circuit_skip(r)
+        ):
             return r
     return None
 
@@ -494,7 +520,10 @@ def summarize_fanout(
     summary is built from. The wording of the user-facing summary stays
     with each action, because every action renders it differently.
     """
+    skipped = sum(is_circuit_skip(r) for r in results if isinstance(r, BaseException))
     for grp, exc in failed_groups(groups, results):
+        if is_circuit_skip(exc):
+            continue
         log.warning(
             "%s enforcement failed for user=%d in group=%s (%d): %s",
             action,
@@ -509,6 +538,8 @@ def summarize_fanout(
     )
     return FanoutOutcome(
         total=len(groups),
-        applied=len(groups) - failed,
+        # * A slot skipped by an open circuit never reached Telegram, so it is
+        # * neither applied nor a failed group.
+        applied=len(groups) - failed - skipped,
         transient=tuple(transient),
     )

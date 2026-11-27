@@ -25,7 +25,7 @@ from tcbot.modules.helper.messages import (
 )
 from tcbot.modules.helper.pipelines import moderation_enforcement
 from tcbot.modules.helper.pipelines.demote_actions import demote_before_enforcement
-from tcbot.modules.helper.pipelines.errors.exceptions import is_chat_admin_required
+from tcbot.modules.helper.pipelines.errors.exceptions import is_user_unreachable
 from tcbot.modules.helper.pipelines.proof_post import upload_proof_media
 from tcbot.modules.helper.rich.edit_msg import clear_markup
 from tcbot.utils.dispatch import (
@@ -614,9 +614,9 @@ async def execute_ban(bot: Client, msgs: list[Message], meta: dict[str, Any]) ->
                 target_id,
                 upsert_result,
             )
-    if is_chat_admin_required(pm_result):
+    if is_user_unreachable(pm_result):
         log.info(
-            "Cannot DM banned user %d: user has not started the bot or has blocked it",
+            "Cannot DM banned user %d: the user cannot receive bot messages",
             target_id,
         )
     elif isinstance(pm_result, BaseException):

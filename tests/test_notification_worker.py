@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
 from typing import Any
 
 import pytest
@@ -89,6 +90,33 @@ def test_a_failed_card_edit_is_retried(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(bot.edits) == 1
     assert completed[0]["state"] == "pending"
     assert completed[0]["retry_after"] is not None
+
+
+def test_a_permission_denial_terminalizes_without_five_edits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing admin right cannot recover, so the card must not retry."""
+    completed = _wire(monkeypatch)
+    bot = _Bot(BadRequest("Telegram says: [400 CHAT_ADMIN_REQUIRED] - not an admin"))
+
+    asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
+
+    assert len(bot.edits) == 1
+    assert completed[0]["state"] == "failed"
+    assert "retry_after" not in completed[0]
+
+
+def test_a_long_flood_wait_sets_a_long_retry_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fixed five-minute retry would burn the budget before the cooldown."""
+    completed = _wire(monkeypatch)
+    bot = _Bot(FloodWait(900))
+
+    asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
+
+    assert completed[0]["state"] == "pending"
+    assert completed[0]["retry_after"] == timedelta(seconds=900)
 
 
 def test_a_rate_limit_reply_does_not_trip_the_shared_circuit(

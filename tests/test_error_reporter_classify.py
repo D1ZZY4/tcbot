@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 
 import pytest
-from pyrogram.errors import BadRequest
+from pyrogram.errors import BadRequest, ChatAdminRequired, ChatWriteForbidden
 from pyrogram.session.session import AuthKeyNotFound
 from sqlalchemy.exc import OperationalError
 
@@ -113,6 +113,32 @@ def test_a_stored_telegram_refusal_is_not_a_code_bug() -> None:
     hint = classify._action_hint(label).lower()
     assert "member permissions" in hint
     assert "re-promote" not in hint
+
+
+@pytest.mark.parametrize(
+    ("exc", "expected"),
+    [
+        (ChatAdminRequired(), "[!] Telegram Permission Denied"),
+        (ChatWriteForbidden(), "[!] Telegram Chat Write Forbidden"),
+    ],
+)
+def test_a_missing_right_is_not_reported_as_a_bad_call(
+    exc: BaseException, expected: str
+) -> None:
+    """An admin-right loss and a chat posting refusal keep distinct guidance."""
+    label = classify._classify(exc)
+    assert label == expected
+    hint = classify._action_hint(label).lower()
+    if isinstance(exc, ChatAdminRequired):
+        assert "admin right" in hint
+    else:
+        assert "member permissions" in hint
+    assert "call arguments" not in hint
+
+
+def test_a_stored_missing_right_gets_the_same_label() -> None:
+    exc = RuntimeError("Telegram says: [400 CHAT_ADMIN_REQUIRED] - not an admin")
+    assert classify._classify(exc) == "[!] Telegram Permission Denied"
 
 
 def test_benign_suppresses_connectivity_and_circuit() -> None:

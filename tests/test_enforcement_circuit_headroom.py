@@ -112,7 +112,7 @@ def test_no_delivery_chunk_exceeds_the_headroom(
     async def _complete(*_args: Any, **_kwargs: Any) -> None:
         return None
 
-    async def _fan_out(coros: Any) -> list[object]:
+    async def _fan_out(coros: Any, **_kwargs: Any) -> list[object]:
         for coro in coros:
             await coro
         return [None] * len(coros)

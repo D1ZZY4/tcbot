@@ -85,7 +85,7 @@ def _wire(
     async def _complete(target_id: int, **kwargs: Any) -> None:
         record["completed"].append((target_id, kwargs))
 
-    async def _fan_out(coros: Any) -> list[object]:
+    async def _fan_out(coros: Any, **_kwargs: Any) -> list[object]:
         for coro in coros:
             if result is None:
                 await coro
@@ -137,7 +137,7 @@ def test_an_active_ban_apply_is_delivered(monkeypatch: pytest.MonkeyPatch) -> No
     async def _complete(target_id: int, **kwargs: Any) -> None:
         completed.append((target_id, kwargs))
 
-    async def _fan_out(coros: Any) -> list[object]:
+    async def _fan_out(coros: Any, **_kwargs: Any) -> list[object]:
         for coro in coros:
             await coro
         return [None]
@@ -227,7 +227,7 @@ def test_a_deferred_ban_demotes_a_staff_target(
     async def _complete(target_id: int, **kwargs: Any) -> None:
         return None
 
-    async def _fan_out(coros: Any) -> list[object]:
+    async def _fan_out(coros: Any, **_kwargs: Any) -> list[object]:
         for coro in coros:
             await coro
         return [None]
@@ -461,7 +461,7 @@ def _wire_apply(
         cleared.append((user_id, list(chat_ids)))
         return len(chat_ids)
 
-    async def _fan_out(coros: Any) -> list[object]:
+    async def _fan_out(coros: Any, **_kwargs: Any) -> list[object]:
         for coro, result in zip(coros, results, strict=True):
             if result is None:
                 await coro
@@ -530,7 +530,7 @@ def test_an_active_mute_apply_keeps_its_deadline(
     async def _complete(target_id: int, **kwargs: Any) -> None:
         return None
 
-    async def _fan_out(coros: Any) -> list[object]:
+    async def _fan_out(coros: Any, **_kwargs: Any) -> list[object]:
         for coro in coros:
             await coro
         return [None]
@@ -860,7 +860,7 @@ def test_a_kick_repair_run_lifts_the_second_step(
         restored.append(action_id)
         return True
 
-    async def _fan_out(coros: Any) -> list[object]:
+    async def _fan_out(coros: Any, **_kwargs: Any) -> list[object]:
         for coro in coros:
             await coro
         return [None]
@@ -1046,7 +1046,7 @@ def test_one_failed_run_does_not_stop_the_next(
     async def _complete(target_id: int, **kwargs: Any) -> None:
         completed.append(target_id)
 
-    async def _fan_out(coros: Any) -> list[object]:
+    async def _fan_out(coros: Any, **_kwargs: Any) -> list[object]:
         for coro in coros:
             await coro
         return [None]
@@ -1138,7 +1138,9 @@ def test_a_half_open_circuit_claims_only_its_single_probe(
     async def _complete(target_id: int, **kwargs: Any) -> None:
         return None
 
-    async def _fan_out(coros: Any, *, probe_reserved: bool = False) -> list[object]:
+    async def _fan_out(
+        coros: Any, *, probe_reserved: bool = False, **_kwargs: Any
+    ) -> list[object]:
         assert probe_reserved is True
         for coro in coros:
             await coro

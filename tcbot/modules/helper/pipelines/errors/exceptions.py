@@ -6,17 +6,22 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from pyrogram.errors import (
     AuthKeyDuplicated,
     BadRequest,
+    BotMethodInvalid,
     ButtonUserInvalid,
     ChatAdminRequired,
+    ChatWriteForbidden,
     Flood,
     Forbidden,
     RPCError,
     SessionRevoked,
     Timedout,
     Unauthorized,
+    UserIsBlocked,
 )
 from pyrogram.errors import Timeout as RPCTimeout
 
@@ -104,9 +109,70 @@ def is_unauthorized(exc: object) -> bool:
     return isinstance(exc, Unauthorized)
 
 
-def is_chat_admin_required(exc: object) -> bool:
-    """Return True when Telegram reports missing admin rights in a chat."""
-    return isinstance(exc, ChatAdminRequired)
+# * Normalized RPC names for refusals no retry can fix: the bot lost a right
+# * or the membership the operation needs. Kurigram maps some of these to
+# * 400 BadRequest and some to 403 Forbidden, so matching on the class alone
+# * would split one operator-facing condition across two labels.
+_PERMISSION_DENIAL_MARKERS: tuple[str, ...] = (
+    "CHATADMINREQUIRED",
+    "CHATWRITEFORBIDDEN",
+    "NOTENOUGHRIGHTS",
+    "RIGHTFORBIDDEN",
+)
+
+
+def is_permission_denial(exc: object) -> bool:
+    """Return True for a Telegram refusal caused by missing rights."""
+    if not is_api_refusal(exc):
+        return False
+    text = "".join(ch for ch in str(exc).upper() if ch.isalnum())
+    return any(marker in text for marker in _PERMISSION_DENIAL_MARKERS)
+
+
+# * A user who never started the bot, blocked it, or cannot receive its
+# * messages is an expected DM outcome, not a missing chat admin right.
+_USER_UNREACHABLE_TYPES: tuple[type[BaseException], ...] = (
+    UserIsBlocked,
+    BotMethodInvalid,
+    ChatWriteForbidden,
+)
+
+
+def is_user_unreachable(exc: object) -> bool:
+    """Return True when a direct message cannot reach its target user."""
+    if exc is None:
+        return False
+    if isinstance(exc, _USER_UNREACHABLE_TYPES):
+        return True
+    text = "".join(ch for ch in str(exc).upper() if ch.isalnum())
+    return any(
+        marker in text
+        for marker in ("USERISBLOCKED", "BOTMETHODINVALID", "CHATWRITEFORBIDDEN")
+    )
+
+
+# * A hostile or extreme server value must not pin a durable row beyond a day;
+# * the worker still retries on the next tick after that ceiling.
+_MAX_FLOOD_WAIT_S: int = 24 * 60 * 60
+
+
+def flood_wait_delay(exc: object) -> timedelta | None:
+    """Return the bounded delay Telegram asked for, or None for other errors.
+
+    Kurigram's code-420 family carries the wait on ``seconds``; older forms
+    also expose ``value``. A durable worker must schedule its next attempt
+    after that deadline instead of retrying on a fixed, shorter interval.
+    """
+    if not is_rate_limit(exc):
+        return None
+    seconds = getattr(exc, "seconds", None)
+    if seconds is None:
+        seconds = getattr(exc, "value", None)
+    if isinstance(seconds, bool) or not isinstance(seconds, (int, float)):
+        return None
+    if seconds <= 0:
+        return None
+    return timedelta(seconds=min(int(seconds), _MAX_FLOOD_WAIT_S))
 
 
 def is_rpc_error(exc: object) -> bool:
@@ -165,8 +231,10 @@ __all__ = [
     "TRANSPORT_TIMEOUT_ERRORS",
     "AuthKeyDuplicated",
     "BadRequest",
+    "BotMethodInvalid",
     "ButtonUserInvalid",
     "ChatAdminRequired",
+    "ChatWriteForbidden",
     "Flood",
     "Forbidden",
     "RPCError",
@@ -174,18 +242,21 @@ __all__ = [
     "SessionRevoked",
     "Timedout",
     "Unauthorized",
+    "UserIsBlocked",
+    "flood_wait_delay",
     "is_api_refusal",
     "is_auth_key_duplicated",
     "is_auth_key_not_found",
     "is_bad_request",
-    "is_chat_admin_required",
     "is_forbidden",
     "is_invalid_button_user",
     "is_mtproto_auth_error",
     "is_owner_only",
+    "is_permission_denial",
     "is_rate_limit",
     "is_rpc_error",
     "is_session_revoked",
     "is_telegram_timeout",
     "is_unauthorized",
+    "is_user_unreachable",
 ]
