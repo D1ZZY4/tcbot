@@ -155,7 +155,9 @@ def _stored_telegram_label(exc: BaseException) -> str | None:
         if "CHAT_WRITE_FORBIDDEN" in str(exc).upper():
             return "[!] Telegram Chat Write Forbidden"
         return "[!] Telegram Forbidden"
-    if code == 429:
+    if code == 420:
+        # * Kurigram's flood RPCs are code 420; 429 is a transport error that
+        # * never reaches this stored-RPC classifier.
         return "[~] Rate Limit: Flood Wait"
     if code == 401:
         return "[!] Telegram Invalid Token"

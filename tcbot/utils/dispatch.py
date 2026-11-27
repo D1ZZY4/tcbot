@@ -67,6 +67,7 @@ _BENIGN_BAD_REQUEST_SUBSTRINGS: tuple[str, ...] = (
 _PERMANENT_BAD_REQUEST_SUBSTRINGS: tuple[str, ...] = (
     "CHAT_ADMIN_REQUIRED",  # bot was demoted or lost its admin rights
     "CHAT_WRITE_FORBIDDEN",  # bot may not write in the chat
+    "RIGHT_FORBIDDEN",  # Kurigram's exact 403 for a missing admin right
     "NOT_ENOUGH_RIGHTS",  # bot lacks the right the operation needs
     "BOT_WAS_KICKED",  # bot is no longer a member of the chat
     "BOT_IS_NOT_A_MEMBER",  # bot was removed from the chat

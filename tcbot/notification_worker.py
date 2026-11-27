@@ -24,6 +24,7 @@ from tcbot.modules.helper.rich.block import html_message
 from tcbot.modules.helper.rich.edit_msg import edit_rich
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.circuit_breaker import CircuitState
+from tcbot.utils.dispatch import is_edit_not_modified_error, is_edit_target_gone_error
 from tcbot.utils.i18n import resolve_locale, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import TELEGRAM_ACTION_TIMEOUT
@@ -274,7 +275,6 @@ async def _process_task(
                     clear_markup=True,
                 )
         except Exception as exc:
-            detail = str(exc).lower()
             # * Match fan_out: only a transport failure trips the breaker. A
             # * service answer, including RetryAfter and BadRequest, does not;
             # * otherwise five rate-limit replies would stall every fan-out.
@@ -287,10 +287,7 @@ async def _process_task(
             if (
                 is_forbidden(exc)
                 or is_invalid_button_user(exc)
-                or (
-                    is_bad_request(exc)
-                    and ("not found" in detail or "message_id_invalid" in detail)
-                )
+                or is_edit_target_gone_error(exc)
             ):
                 await _complete(
                     state="skipped",
@@ -298,7 +295,7 @@ async def _process_task(
                     expected_attempts=attempts,
                 )
                 return
-            if is_bad_request(exc) and "not modified" in detail:
+            if is_bad_request(exc) and is_edit_not_modified_error(exc):
                 # * Telegram already has the closed text, so the edit landed from
                 # * the operator's point of view. A failed settlement must not
                 # * fall through to run_once's ceiling handler, which would mark

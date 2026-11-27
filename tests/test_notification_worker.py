@@ -10,11 +10,12 @@ import asyncio
 from typing import Any
 
 import pytest
+from pyrogram.errors import FloodWait
 from pyrogram.types import InlineKeyboardMarkup
 
 from tcbot import database as db
 from tcbot import notification_worker
-from tcbot.modules.helper.pipelines.errors.exceptions import BadRequest, FloodWait
+from tcbot.modules.helper.pipelines.errors.exceptions import BadRequest
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.time_and_date import monotonic
 

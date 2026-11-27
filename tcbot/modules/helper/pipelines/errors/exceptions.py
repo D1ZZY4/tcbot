@@ -9,8 +9,9 @@ from __future__ import annotations
 from pyrogram.errors import (
     AuthKeyDuplicated,
     BadRequest,
+    ButtonUserInvalid,
     ChatAdminRequired,
-    FloodWait,
+    Flood,
     Forbidden,
     RPCError,
     SessionRevoked,
@@ -25,7 +26,9 @@ class PollingConflictError(RuntimeError):
 
 
 # * Error groups shared by classification, dispatch, and operator messaging.
-RATE_LIMIT_ERRORS: tuple[type[BaseException], ...] = (FloodWait,)
+# * All code-420 RPCs share the Flood base; only matching FloodWait missed the
+# * premium, slowmode, and other flood-family errors Kurigram can surface.
+RATE_LIMIT_ERRORS: tuple[type[BaseException], ...] = (Flood,)
 TELEGRAM_TIMEOUT_ERRORS: tuple[type[BaseException], ...] = (Timedout, RPCTimeout)
 TRANSPORT_TIMEOUT_ERRORS: tuple[type[BaseException], ...] = (
     TimeoutError,
@@ -53,11 +56,14 @@ _INVALID_BUTTON_USER_MARKERS: tuple[str, ...] = (
 def is_invalid_button_user(exc: object) -> bool:
     """Return True for a stale or invalid user-profile button in a rich message.
 
-    Kurigram maps the unknown 400 ``BUTTON_USER_INVALID`` RPC error to a plain
-    ``BadRequest``, so the RPC text is the only reliable signal.
+    Kurigram 2.2.27 maps the 400 ``BUTTON_USER_INVALID`` RPC to the exact
+    ``ButtonUserInvalid`` class. Durable records rebuild the refusal as text,
+    so the marker check stays as a fallback for those rebuilt exceptions.
     """
     if exc is None:
         return False
+    if isinstance(exc, ButtonUserInvalid):
+        return True
     text = str(exc).lower()
     return any(marker in text for marker in _INVALID_BUTTON_USER_MARKERS)
 
@@ -159,8 +165,9 @@ __all__ = [
     "TRANSPORT_TIMEOUT_ERRORS",
     "AuthKeyDuplicated",
     "BadRequest",
+    "ButtonUserInvalid",
     "ChatAdminRequired",
-    "FloodWait",
+    "Flood",
     "Forbidden",
     "RPCError",
     "RPCTimeout",
