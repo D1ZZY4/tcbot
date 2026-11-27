@@ -150,8 +150,8 @@ attach whatever landed.
 
 `moderation_db.archive_proof()` writes the upload row and its items inside the
 decision transaction. The same transaction opens the case, writes the
-`moderation_actions` decision, links the selected rules, and closes the case.
-Either the decision and its proof both commit, or neither does.
+`moderation_actions` decision, and closes the case. Either the decision and its
+proof both commit, or neither does.
 
 | Helper | Owner | Role |
 |---|---|---|

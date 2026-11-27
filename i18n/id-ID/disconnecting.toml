@@ -31,8 +31,8 @@ body = """
 `/tcdisconnect` putus grup ini (alias `/tcdiscon`).
 `/rmtc -1001234567890` hapus paksa grup via ID chat."""
 
-# Runtime strings (disconnecting.py). [state] sends plain (parse_mode=None
-# replies); [removed] renders as rich HTML. Placeholders: {community}
+# Runtime strings (disconnecting.py). [state] renders as plain notices;
+# [removed] renders as rich HTML. Placeholders: {community}
 # raw name, {id} pre-formatted code chat ID.
 
 [state]

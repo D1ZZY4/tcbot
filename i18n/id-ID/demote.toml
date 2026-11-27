@@ -1,4 +1,4 @@
-# Runtime strings for demotion (demote_flow.py).
+# Runtime strings for demotion (demote_actions.py).
 # [dm] sends to the demoted user (their personal locale, resolved inside
 # execute); [abort] replies in the moderator's chat (resolved at call).
 # Both render as rich HTML.

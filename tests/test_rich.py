@@ -503,3 +503,25 @@ def test_rich_edit_can_clear_a_keyboard() -> None:
     )
     kwargs = bot.calls[0][1]
     assert kwargs["reply_markup"].inline_keyboard == []
+
+
+def test_a_dropped_keyboard_is_reported_at_error_level(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A dropped keyboard must be visible, not silently lose buttons."""
+    caplog.set_level("ERROR")
+    markup = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("Long", callback_data="x" * 65)]]
+    )
+    bot = _FakeBot()
+    asyncio.run(
+        rc.send_rich(
+            cast("Any", bot),
+            -100,
+            rich_block.html_message("x"),
+            reply_markup=markup,
+        )
+    )
+    assert "Rich keyboard conversion failed" in caplog.text
+    assert "reply_markup" not in bot.calls[0][1]
+    assert "<tg-button-row>" not in bot.calls[0][1]["rich_message"].html

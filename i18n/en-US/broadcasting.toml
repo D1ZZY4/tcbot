@@ -26,7 +26,7 @@ body = """
 Or reply to a message and run `/bc` to forward it to all groups."""
 
 # Runtime strings (broadcasting.py). [no_content]/[done] render rich HTML;
-# [sending] sends plain (no parse_mode). Placeholders: {ok}/{failed}/
+# [sending] renders as a plain notice. Placeholders: {ok}/{failed}/
 # {n} pre-formatted code counts.
 
 [send]

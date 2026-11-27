@@ -30,7 +30,7 @@ body = """
 `/c 123456789`
 Or reply to a message and run `/c`."""
 
-# Runtime strings for profile and drill-down views (check_flow.py).
+# Runtime strings for profile and drill-down views (check_panels.py).
 # All render as rich HTML.
 # Placeholders: {user} pre-formatted mention, {name} raw display name,
 # {id} pre-formatted code ID, {role}/{by} pre-formatted fragments,

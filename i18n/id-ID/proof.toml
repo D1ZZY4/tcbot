@@ -1,6 +1,6 @@
 # Proof-step strings shared by ban/kick/mute/warn flows.
 # Structure lives in proof_steps.py and proof_post.py; only prose lives here.
-# [empty]/[unexpected] send plain (alerts, parse_mode=None replies).
+# [empty]/[unexpected] are plain notices: plain=True at call sites.
 # [prompt] entries render as rich HTML.
 # Placeholders: {gerund}/{Doing} localized verb forms, {target} rich
 # mention, {suffix} rich extra, {reason} raw reason text, {done}

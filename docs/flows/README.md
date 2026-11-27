@@ -22,7 +22,7 @@ instead of repeating another domain's detail.
 
 | Page | Covers |
 |---|---|
-| [Banning](banning.md) | Federation ban: commands, re-ban confirmation, rules picker, proof, dual rank gate, decision write, delivery, summary, appeal handoff. |
+| [Banning](banning.md) | Federation ban: commands, re-ban confirmation, proof, dual rank gate, decision write, delivery, summary, appeal handoff. |
 | [Unbanning](unbanning.md) | Fail-closed demote gate, atomic revoke and queue, per-group delivery, appeal slot handling, repair. |
 | [Kicking](kicking.md) | Current-chat ban and rejoin, optional proof, audit row, reconcile repair. |
 | [Muting](muting.md) | Duration parsing, apply and revoke runs, timed state machine, join and connect replay. |

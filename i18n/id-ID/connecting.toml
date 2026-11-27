@@ -19,7 +19,7 @@ body = "Di dalam grup yang ingin dihubungkan ke {community}."
 body = """
 Menghubungkan grupmu ke federasi {community}. Setelah terhubung:
 - Ban federasi ditegakkan otomatis: pengguna yang sedang di-ban dikeluarkan, dan pengguna yang baru di-ban di-kick saat ban dijatuhkan.
-- Mute federasi diterapkan saat dikeluarkan.
+- Mute federasi diterapkan saat dijatuhkan.
 - Pesan broadcast dari Staf federasi diteruskan ke grupmu."""
 
 [help.permissions]
@@ -36,8 +36,9 @@ Saat bot pertama kali ditambahkan ke grup, ia otomatis meminta pemilik grup untu
 [help.examples]
 body = "Jadikan bot admin grup, lalu jalankan `/tcconnect` di dalam grup."
 
-# Runtime strings for the connect flow (connected_flow.py).
-# All send plain (no parse_mode): plain=True at call sites.
+# Runtime strings for the connect flow (connect_added.py,
+# connect_decision.py, connect_replay.py, and connect_common.py).
+# Notices use plain=True; verification pages render as rich blocks.
 # Placeholders: {community} raw community name.
 
 [state]
@@ -72,7 +73,7 @@ welcome_points_title = "Yang akan kita periksa bersama"
 welcome_point_1 = "Persetujuan admin grup ini tercatat di koordinator atau kanal resmi."
 welcome_point_2 = "Grup ini tercantum dalam daftar anggota federasi."
 welcome_point_3 = "Persetujuan itu masih berlaku dan belum ditarik."
-welcome_hint = "Hanya pemilik grup yang bisa melanjutkan. Belum ada yang terhubung sampai Anda mengetuk `Connect`."
+welcome_hint = "Hanya pemilik grup yang bisa melanjutkan. Belum ada yang terhubung sampai kamu mengetuk `Hubungkan`."
 why = "Mengapa ini penting"
 page_1_title = "Persetujuan tercatat"
 page_1_body = "Sebuah grup menjadi bagian federasi hanya bila administratornya menyetujui dan keputusan itu ditulis. Catatannya disimpan di grup koordinasi admin atau di kanal resmi."
@@ -93,4 +94,4 @@ page_4_note = "Anggota tetap memiliki hak normal kecuali ada keputusan tercatat 
 page_5_title = "Siap menghubungkan"
 page_5_body = "Anda telah meninjau poin keanggotaan dan cakupan moderasi. Menghubungkan akan mendaftarkan grup ini, memutar ulang ban dan mute aktif, serta menyalakan penegakan federasi mulai sekarang."
 page_5_detail = "Putaran ulang dibatasi. Jika sebagian pembatasan belum bisa diterapkan, bot mengantreannya dan terus mencoba; catatan koneksi mencatat hasilnya."
-page_5_note = "Hanya pemilik grup yang bisa menekan Connect. Cancel membiarkan grup ini apa adanya."
+page_5_note = "Hanya pemilik grup yang bisa menekan Hubungkan. Batal membiarkan grup ini apa adanya."

@@ -49,8 +49,7 @@ returns false for a missing, expired, or unknown permission. Key format is
 `^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$`.
 
 The seed catalog defines keys across the `audit`, `automation`, `community`,
-`groups`, `members`, `moderation`, `roles`, and `rules` resources. Representative
-grants:
+`groups`, `members`, `moderation`, and `roles` resources. Representative grants:
 
 | Permission | admin | developer | moderator | owner |
 |---|---|---|---|---|
@@ -58,13 +57,10 @@ grants:
 | `roles.demote` | yes | no | no | yes |
 | `roles.review_promotion_requests` | no | no | no | yes |
 | `roles.transfer_ownership` | no | no | no | yes |
-| `rules.manage` | yes | no | no | yes |
-| `rules.view` | yes | yes | yes | yes |
 
-`rules.manage` and `rules.view` are enforced by direct
-`users_roles.has_permission()` calls in `rules_editor_steps.py`, `mod_action_steps.py`, and
-`ban_rules_step.py`. Capability checks are explicit at the call site; there is
-no separate decorator gate.
+Capability checks are explicit at the call site; there is no separate decorator
+gate. Current authorization uses the tier gates and executor-versus-target
+guards below, so no production flow calls `has_permission()` today.
 
 ## Executor and target checks
 
@@ -155,12 +151,14 @@ an alert while the prompt stays live.
 Kurigram 2.2.27 speaks MTProto and exposes a much wider method surface than the
 HTTP Bot API. Telegram documents that a session authorized with a bot token is
 still a bot identity, that bots may call most MTProto methods, and that each
-method's own eligibility note decides whether bots may use it. The raw methods
-this application relies on, `channels.editBanned` and `channels.editAdmin`, are
-both documented as callable by users and bots, and both still list
-`CHAT_ADMIN_REQUIRED`, `CHAT_WRITE_FORBIDDEN`, and `RIGHT_FORBIDDEN` among their
-possible errors. A raw call therefore cannot supply a right the acting bot was
-not granted.
+method's own eligibility note decides whether bots may use it. The moderation
+methods this application calls through Kurigram wrappers build requests such as
+`channels.editBanned` and `messages.deleteChatUser`, which Telegram documents as
+callable by users and bots while still listing `CHAT_ADMIN_REQUIRED`,
+`CHAT_WRITE_FORBIDDEN`, and `RIGHT_FORBIDDEN` among their possible errors. A raw
+call therefore cannot supply a right the acting bot was not granted. This bot
+does not call `channels.editAdmin`: federation roles are database roles, not
+Telegram administrator grants.
 
 The layers stay separate in code: `Client` wrappers (`ban_chat_member`,
 `unban_chat_member`, `restrict_chat_member`, `promote_chat_member`) go through

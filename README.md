@@ -83,7 +83,7 @@ Only six values are required. Everything else has a working default.
 | `DATABASE_URL` | Yes | - | PostgreSQL connection string. |
 | `COMMUNITY_NAME` | No | `Bot` | Display name used in bot messages and logs. |
 | `PREFIXES` | No | `["/", "!", "."]` | Python-style list of command prefixes. |
-| `PORT` | No | `5000` | Flask health-server port (`1`-`65535`); `auto` or invalid values fall back to `5000`. |
+| `PORT` | No | `5000` | Flask health-server port (`1`-`65535`); blank or invalid values fall back to `5000`. Keep it numeric under Compose, which maps the same value from the host. |
 | `BIND_HOST` | No | `0.0.0.0` | Listener interface; set `127.0.0.1` behind a local reverse proxy. |
 | `LOG_LEVEL` | No | `INFO` | One of `NOTSET`, `DEBUG`, `INFO`, `WARNING`, `WARN`, `ERROR`, `CRITICAL`, `FATAL`. |
 
@@ -209,7 +209,7 @@ Fail-fast guard: 5 deaths within 10 minutes aborts the run (usually bad config);
 <details>
 <summary>Docker and Docker Compose</summary>
 
-1. `cp config.env.example .env` and set at least `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL=postgresql://tcbot:tcbot@postgres:5432/tcbot`, `PROOFS`, `API_ID`, `API_HASH`, and `REDIS_URL=redis://redis:6379/0`.
+1. `cp config.env.example .env` and set at least `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL=postgresql://tcbot:tcbot@postgres:5432/tcbot`, `POSTGRES_PASSWORD=tcbot` (Compose requires it and the URL password must match), `PROOFS`, `API_ID`, `API_HASH`, and `REDIS_URL=redis://redis:6379/0`.
 2. `docker compose up --build` (bot plus `postgres:16-alpine` plus `redis:7-alpine`, each with health checks; the bot waits for both databases).
 3. Verify: `curl localhost:${PORT:-5000}/health` returns subsystem JSON with HTTP 200.
 
@@ -271,7 +271,7 @@ WantedBy=multi-user.target
 The Flask keep-alive server binds to `${BIND_HOST}:${PORT}` (`BIND_HOST` defaults to `0.0.0.0`; the port defaults to `5000` on unset, invalid, or out-of-range values).
 
 - `GET /` returns `OK` for uptime monitors.
-- `GET /health` returns subsystem status (database, Redis, scheduler, circuit breakers) as JSON, with HTTP 503 while degraded.
+- `GET /health` returns subsystem status (database, Redis, scheduler, circuit breakers, and the `polling` flag) as JSON, with HTTP 503 while a required dependency or the polling loop is degraded.
 - `GET /metrics` exposes Prometheus metrics when the `observability` extra is installed; it is absent otherwise.
 
 > [!TIP]
@@ -301,7 +301,7 @@ git diff --check
 - [Setup guide](docs/getting-started/setup.md) and [Configuration reference](docs/reference/configuration.md).
 - [Architecture overview](docs/architecture/overview.md): startup flow, package ownership, and service boundaries.
 - [Database layer](docs/architecture/database.md) and [Security model](docs/architecture/security.md).
-- [Flow index](docs/flows/README.md): 18 full domain flows, starting with the [system spine](docs/flows/system.md).
+- [Flow index](docs/flows/README.md): 17 full domain flows, starting with the [system spine](docs/flows/system.md).
 - [Commands](docs/reference/commands.md) and [Callbacks](docs/reference/callbacks.md): stable references.
 - [Documentation index](docs/README.md): the complete map.
 - [Project guide](AGENTS.md): contributor and maintainer rules.

@@ -334,8 +334,9 @@ def _markup_dict(reply_markup: Any | None) -> dict[str, Any] | None:
     for row in rows:
         cells: list[dict[str, Any]] = []
         for cell in row:
-            # * Rich HTML has no equivalent for these native actions. Keep the
-            # * whole keyboard inline instead of turning a live button dead.
+            # * Rich HTML has no equivalent for these native actions. The whole
+            # * keyboard is dropped with an ERROR by the transport instead of
+            # * becoming a second, native representation of the message.
             if _has_native_only_action(cell):
                 return None
             data: dict[str, Any] = {"text": getattr(cell, "text", "")}
@@ -383,7 +384,8 @@ def button_from_cell(cell: dict[str, object]) -> str | None:
     An unsupported style is dropped, leaving the button in its default
     color. Every Kurigram action maps to a rich button; ``None`` is returned
     only when the cell has no label or its callback exceeds 64 bytes. One
-    unmappable cell keeps the whole keyboard inline.
+    unmappable cell drops the whole keyboard; no native representation is
+    sent instead.
     """
     label = cell.get("text")
     if not isinstance(label, str):
@@ -464,8 +466,8 @@ def buttons_from_markup(reply_markup: object | None) -> list[str] | None:
     """Convert a Kurigram inline markup into rich button rows.
 
     Conversion is all-or-nothing: one cell that cannot be expressed as a rich
-    button keeps the whole keyboard as native inline markup, so no button is
-    silently lost.
+    button drops the whole keyboard, which the transport reports with an ERROR.
+    There is no native representation of the message.
     """
     markup = _markup_dict(reply_markup)
     if markup is None:

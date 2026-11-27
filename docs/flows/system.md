@@ -140,9 +140,11 @@ User-facing messages render through `rich/send_msg.py`, `rich/reply_msg.py`,
 `rich/edit_msg.py`, and `rich/forward_msg.py`. Text sends, replies, and edits use
 Kurigram's native `InputRichMessage`. Keyboards are rich buttons only; a markup
 that cannot be converted is dropped with an ERROR, never sent as a native
-keyboard. Explicit keyboard clearing still uses an empty native markup because
-Telegram has no rich equivalent. Forwards keep the original sender
-header and are owned by `forward_rich`. Plain notices and callback alerts are
-rendered as text inside a rich payload. No parse mode is used anywhere. Every decision
+keyboard. Removing an existing keyboard is a separate keyboard-only Telegram
+primitive: it carries no message content and Telegram has no rich equivalent,
+so `clear_markup` is the one allowed native edit and it never renders a second
+copy of a message. Forwards keep the original sender header and are owned by
+`forward_rich`. Plain notices and callback alerts are rendered as text inside a
+rich payload. No parse mode is used anywhere. Every decision
 commits to PostgreSQL before any Telegram call, and unfinished per-group
 deliveries are queued for the workers described in [Runtime](../architecture/runtime.md).

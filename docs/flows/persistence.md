@@ -57,9 +57,9 @@ every caller.
 ### Decision and enforcement run in one transaction
 
 A decision is never committed without the run that delivers it. The flow opens
-a case under an advisory lock, archives proof, links selected rules, queues the
-enforcement run with a stable idempotency key, and closes the case, all on the
-session given by `run_transaction`. The Telegram call happens only after the
+a case under an advisory lock, archives proof, queues the enforcement run with
+a stable idempotency key, and closes the case, all on the session given by
+`run_transaction`. The Telegram call happens only after the
 commit.
 
 ```mermaid

@@ -11,8 +11,6 @@ owns, and how the process comes up. The flows drawn as diagrams are in
 ├── tcbot/                  Application package
 ├── alembic/                Alembic migration scripts and revisions
 ├── about/                  Bundled About source documents
-├── acknowledge/            Bundled self-acknowledgement source document
-├── rules/                  Bundled rule documents for scripts/seed_rules.py
 ├── i18n/                   TOML translation catalogs (en-US is the source)
 ├── tests/                  Pytest suite
 ├── scripts/                One-shot operator tools
@@ -121,7 +119,7 @@ visible work. See [Security](security.md) for the tier and guard contracts.
 `tcbot/utils/` owns cross-cutting behaviour without domain rules. The main
 modules are `i18n.py`, `dispatch.py`, `circuit_breaker.py`, `transport.py`,
 `time_and_date.py`, `prefixes.py`, `logger.py`, `metrics.py`, `tasks.py`,
-`update_processor.py`, `pagination.py`, and `secrets.py`. Error reporting lives
+`update_processor.py`, and `pagination.py`. Error reporting lives
 in `tcbot/modules/helper/pipelines/errors/`. See [Runtime](runtime.md).
 
 ## Service boundaries

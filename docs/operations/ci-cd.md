@@ -51,8 +51,10 @@ opens a PR on branch `deps/auto-update-<date>` when the lock changed. It validat
 service-free Pytest group; a failing check stops before the PR is opened. It
 then generates a Conventional Commit title and body through GitHub Models with
 a static fallback. It retries PR creation with `BOT_PAT` when `github.token`
-lacks permission, and sends a plain HTML Telegram notification to `OWNER_ID`
-only when the PR was created.
+lacks permission, and sends one rich Telegram notification to `OWNER_ID` only
+when the PR was created. `scripts/notify_ci.py` builds an `InputRichMessage`
+and uses the same Kurigram transport as the bot, so no Bot API parse-mode send
+path remains in the repository.
 
 ## 24/7 runner
 
@@ -82,7 +84,7 @@ only when the PR was created.
 | Secret | Used by | Purpose |
 |---|---|---|
 | `BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID` | Runner, notifications | Runtime credentials. |
-| `API_ID`, `API_HASH`, `MTPROTO_SESSION` | Runner | MTProto identity lookups. |
+| `API_ID`, `API_HASH`, `MTPROTO_SESSION` | Runner, notifications | MTProto identity lookups and the rich CI notice. |
 | `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`, `MAIN_GROUP`, `MAIN_CHANNEL`, `INFRA_CHAT_IDS` | Runner | Infrastructure destinations. |
 | `DB_SCHEMA`, `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `REDIS_URL`, `PG_CRON_ENABLED` | Runner | Database and cache configuration. |
 | `PORT`, `BIND_HOST` | Runner | Health server listener. |

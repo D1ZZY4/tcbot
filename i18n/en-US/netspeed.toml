@@ -24,7 +24,7 @@ body = """
 `/st full`"""
 
 # Runtime strings for /ping and /speedtest.
-# [status] entries send without parse_mode: plain=True at the call site.
+# [status] entries are plain notices: plain=True at the call site.
 # [pong] and [result] entries render as rich HTML.
 # Placeholders: {latency} and {value} carry pre-formatted code markup.
 

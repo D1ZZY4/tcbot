@@ -62,6 +62,7 @@ state machine, database writes, Telegram delivery, failure paths, and exact name
 - [Callbacks and states](reference/callbacks.md) - exhaustive callback and `WAITING_*` registry plus the payload grammar.
 - [Buttons](reference/buttons.md) - every keyboard builder, emitted callback, color, label key, and layout rule.
 - [Configuration](reference/configuration.md) - every environment variable, default, and validation rule.
+- [Telegram API surface](reference/telegram-api.md) - installed Kurigram version, raw methods, identity and chat-right boundaries.
 
 ### Operations
 

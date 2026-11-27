@@ -33,9 +33,8 @@ flowchart TD
 `cmd_unmute` is a single-action command that delegates to
 `targets.run_staff_action(action="unmute", min_role="moderator", execute=execute_unmute)`.
 The mute conversation is built by `mute_conversation()` with
-`BuildReason("mute", skip_allowed=False)`, `BuildProof("mute")`,
-`rules_enabled=True`, and an escape filter so `/tcunmute` is not swallowed as a
-reason.
+`BuildReason("mute", skip_allowed=False)`, `BuildProof("mute")`, and an escape
+filter so `/tcunmute` is not swallowed as a reason.
 
 Accepted duration suffixes are `s`, `m`, `h`, `d`, `w`, `mo`, and `ye`. Telegram
 treats a restriction longer than 366 days as indefinite, so the parser rejects
@@ -51,18 +50,12 @@ becoming a permanent mute.
 |---|---|---|
 | `mod_action_steps.py` | `WAITING_REASON` | 0 |
 | `mod_action_steps.py` | `WAITING_PROOF` | 1 |
-| `mod_action_steps.py` | `WAITING_RULES` | 2 |
-| `mod_action_steps.py` | `WAITING_RULES_NOTE` | 3 |
 
 | Callback data | Meaning |
 |---|---|
 | `mute_cancel` | Cancel the live mute prompt. |
 | `mute_done_proof` | Flush collected proof and execute. |
 | `mute_skip_proof` | Execute without proof. |
-| `rules_step:pick:<id>` | Toggle a rules selection. |
-| `rules_step:done` | Confirm selection. |
-| `rules_step:other` | Enter an optional note. |
-| `rules_step:clear` | Clear selection. |
 
 The executor adapter `_exec_mute()` copies the `mute_` keys out of the flow scope
 and calls `execute_mute()`. Done and Skip claim the execution slot before their
@@ -95,8 +88,8 @@ sequenceDiagram
     Flow->>Bot: post mute log and edit summary prompt
 ```
 
-`mutes_db.record_mute()` writes the decision, case, optional proof archive, rule
-links, and apply run in one transaction with idempotency key
+`mutes_db.record_mute()` writes the decision, case, optional proof archive, and
+apply run in one transaction with idempotency key
 `moderation:{action_id}:apply:v1`. A failed write aborts before any group is
 touched. `demote_before_enforcement()` is best effort and runs before that
 write: it must never block enforcement once the decision is committed, and a

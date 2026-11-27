@@ -19,7 +19,7 @@ body = """
 *Chat Terhubung*: tabel semua grup aktif per halaman dengan ID, penghubung, dan tanggal connect.
 *Ban Pengguna*: tabel semua ban aktif per halaman dengan ID, alasan, dan tanggal, plus pintasan *Cari* untuk mencari pengguna via nama atau ID.
 
-Tiap tabel dihalaman dengan *Sebelumnya* dan *Berikutnya* serta diakhiri tombol *Kembali* ke ringkasan utama."""
+Tiap tabel dihalaman dengan *Sblm* dan *Lanjut* serta diakhiri tombol *Kembali* ke ringkasan utama."""
 
 [help.examples]
 body = """
@@ -35,7 +35,7 @@ access_retry = "Tidak bisa memverifikasi aksesmu sekarang. Coba lagi sebentar."
 staff_only = "Panel ini khusus untuk TC Staff."
 db_fail = "Tidak bisa memuat data. Database tidak terjangkau, coba lagi sebentar."
 
-# Runtime strings for stats views (stats_flow.py). All render rich HTML
+# Runtime strings for stats views (stats_panels.py). All render rich HTML
 # except button labels (plain). Placeholders as documented per key.
 
 [button]

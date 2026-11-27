@@ -76,11 +76,11 @@ expired, or unknown permission.
 | Check | `db.users_roles.has_permission(uid, key)` |
 | Key format | `^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$` (`permission_definitions` check constraint) |
 | Catalog helpers | `permission_catalog()`, `permissions_for(user_id)`, `role_catalog()` |
-| Current direct uses | `rules.manage` on the rules editors; `rules.view` checked by reason and rule flows |
+| Current direct uses | None. Authorization uses tier gates and executor-versus-target checks; the capability helper is available for future checks. |
 
 The seed catalog in `database/schema/seed.sql` defines keys across the `audit`,
-`automation`, `community`, `groups`, `members`, `moderation`, `roles`, and
-`rules` resources. Representative grants:
+`automation`, `community`, `groups`, `members`, `moderation`, and `roles`
+resources. Representative grants:
 
 | Permission | admin | developer | moderator | owner |
 |---|---|---|---|---|
@@ -88,8 +88,6 @@ The seed catalog in `database/schema/seed.sql` defines keys across the `audit`,
 | `roles.demote` | yes | no | no | yes |
 | `roles.review_promotion_requests` | no | no | no | yes |
 | `roles.transfer_ownership` | no | no | no | yes |
-| `rules.manage` | yes | no | no | yes |
-| `rules.view` | yes | yes | yes | yes |
 
 Capability checks fail closed: a lookup exception produces the role-lookup
 refusal and the handler is not called.

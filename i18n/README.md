@@ -102,14 +102,15 @@ composed into a panel must be escaped at that boundary.
 
 1. Copy `en-US/` to `<locale>/` (BCP 47 shape, e.g. `pt-BR`, `fr-CA`).
 2. Set `button.language_name` to the locale display name.
-3. Translate every value. A locale may omit a key and fall back to `en-US`
-   per key, but every key it defines must use the same placeholder names as
-   `en-US`; the parity check rejects extra keys and placeholder mismatches.
-   Button labels render as plain text; message templates are escaped by the
-   engine, so translators never write backslashes in either file.
-4. Run `uv run pytest tests/test_i18n.py -q`: placeholder
-   mismatches, unbalanced mini-markup or parentheses, and retired drawn
-   separators fail the suite.
+3. Translate every value and define every key the source catalog defines.
+   A missing key fails the parity test in CI; at runtime `t()` still falls back
+   to `en-US` per key, so an incomplete locale silently inherits English until
+   it is fixed. Placeholder names must match `en-US` exactly. Button labels
+   render as plain text; message templates are escaped by the engine, so
+   translators never write backslashes in either file.
+4. Run `uv run pytest tests/test_catalog_parity.py tests/test_i18n.py -q`:
+   missing keys, extra keys, placeholder mismatches, unbalanced mini-markup
+   or parentheses, and retired drawn separators fail the suite.
 
 ## Adding a domain
 

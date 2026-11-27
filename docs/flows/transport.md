@@ -19,7 +19,9 @@ explicit block objects.
 `buttons_from_markup()` and, when rows exist and `message["html"]` is a string,
 appends the rows to the HTML with a newline. It returns the payload and drops
 any keyboard it cannot express as rich buttons, logging an ERROR. An empty
-markup is also dropped so editors can still clear an old keyboard.
+markup produces no rows and no error; removing an existing keyboard is a
+separate keyboard-only primitive (`clear_markup`), not a second copy of the
+message.
 The send and edit helpers always embed convertible buttons as rich markup; they
 never attach a native keyboard to a rich payload.
 Conversion is all-or-nothing for real cells: one unmappable cell, a row longer

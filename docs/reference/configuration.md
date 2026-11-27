@@ -24,7 +24,7 @@ fail at load time with an actionable message. The template is
 |---|---|---|
 | `COMMUNITY_NAME` | `Bot` | Display name in messages and logs. |
 | `PREFIXES` | `["/", "!", "."]` | Python-style list or tuple, or comma-separated values. |
-| `PORT` | `5000` | `auto`, invalid, or out-of-range values resolve to 5000. |
+| `PORT` | `5000` | Blank, invalid, or out-of-range values resolve to 5000. Keep it numeric under Compose, which maps the same value from the host. |
 | `BIND_HOST` | `0.0.0.0` | Listener interface; `127.0.0.1` behind a reverse proxy. |
 | `LOG_LEVEL` | `INFO` | `NOTSET`, `DEBUG`, `INFO`, `WARNING`, `WARN`, `ERROR`, `CRITICAL`, `FATAL`. |
 | `SENTRY_DSN` | empty | Opt-in error monitoring with the observability extra. |

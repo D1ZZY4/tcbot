@@ -1,6 +1,7 @@
 # Language preferences: personal (/start, PM) and per-group settings.
-# Placeholders use {name} and are filled by the caller; only the listed
-# placeholders may appear. Templates stay raw: no manual backslashes.
+# Placeholders are {title}, {divider}, {quote}, and {language}, filled by the
+# caller; only the listed placeholders may appear. Templates stay raw: no
+# manual backslashes.
 
 # Panel structure. {title} adalah heading rich, {divider} garis rich dan
 # {quote} kutipan blok; ketiganya sudah diformat dari language.py.

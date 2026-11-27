@@ -5,8 +5,8 @@ retry = "Something went wrong on our side. Please try again in a moment."
 
 # Shared moderation error and notice strings (replies.py owners).
 # Send path per key: keys rendered through rich HTML sends use the
-# default mode; keys sent as plain text (alerts, parse_mode=None
-# replies) render with plain=True at the call site.
+# default mode; keys sent as plain notices (alerts and callback
+# answers) render with plain=True at the call site.
 
 [err]
 cannot_resolve = "Cannot resolve that target. Reply to their message, or pass a user ID or @username."
@@ -25,9 +25,9 @@ staff_only = "TC Staff (Admin and above)."
 dev_above = "Developer and above (Owner / Admin / Developer)."
 moderator_above = "Moderator and above (Owner / Admin / Developer / Moderator)."
 
-# Full-sentence authorization refusals (replies.py owners). All send as
-# plain text (parse_mode=None replies), so they render with plain=True
-# at the call site. Placeholders: {role} = target role label.
+# Full-sentence authorization refusals (replies.py owners). All render as
+# plain notices, so they use plain=True at the call site.
+# Placeholders: {role} = target role label.
 
 [refuse]
 owner_only = "This command is reserved for the Owner - you're not authorized."

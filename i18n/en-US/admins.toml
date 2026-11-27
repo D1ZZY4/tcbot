@@ -70,7 +70,7 @@ body = """
 `/tcpromoterequests` request promotion to Admin
 `/tcplist` list pending promotion requests"""
 
-# Runtime strings for promotion (promote_flow.py).
+# Runtime strings for promotion (promote_request.py and promote_steps.py).
 # Every surface renders as rich HTML through the rich transports.
 # Placeholders: {user} pre-formatted user reference, {role}/{label}/
 # {community} raw values escaped once by the renderer.
@@ -108,8 +108,8 @@ anon_admin = "This command must be sent from your personal account, not as the g
 already_role = "You're already a {role} - no request needed."
 existing = "You already have a pending request (ID: {id})."
 
-# Shared admin error strings. All send plain (parse_mode=None replies,
-# plain edits, alerts): plain=True at call sites.
+# Shared admin error strings. All render as plain notices: plain=True
+# at call sites.
 
 [error]
 no_assign_perms = "You don't have permission to assign any roles."

@@ -5,8 +5,8 @@ retry = "Terjadi masalah di sisi kami. Coba lagi sebentar."
 
 # Shared moderation error and notice strings (replies.py owners).
 # Send path per key: keys rendered through rich HTML sends use the
-# default mode; keys sent as plain text (alerts, parse_mode=None
-# replies) render with plain=True at the call site.
+# default mode; keys sent as plain notices (alerts and callback
+# answers) render with plain=True at the call site.
 
 [err]
 cannot_resolve = "Target itu tidak bisa dikenali. Balas pesan mereka, atau sertakan ID pengguna atau @username."
@@ -26,9 +26,8 @@ dev_above = "Developer ke atas (Owner / Admin / Developer)."
 moderator_above = "Moderator ke atas (Owner / Admin / Developer / Moderator)."
 
 # Penolakan otorisasi kalimat penuh (pemilik: replies.py). Semuanya
-# terkirim sebagai teks polos (balasan parse_mode=None), jadi dirender
-# dengan plain=True di lokasi pemanggilan. Placeholder: {role} = label
-# peran target.
+# dirender sebagai notifikasi polos, jadi memakai plain=True di lokasi
+# pemanggilan. Placeholder: {role} = label peran target.
 
 [refuse]
 owner_only = "Perintah ini khusus Owner - kamu tidak berwenang."

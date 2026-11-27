@@ -13,7 +13,7 @@ body = "`/tcgroups` `/tcg`"
 body = """
 Menampilkan semua grup yang terhubung ke {community}, beserta jumlah total.
 
-Tampilan default hanya nama grup. Ketuk *Detail* untuk memperluas daftar dan menampilkan ID chat tiap grup di samping namanya. Ketuk *Sederhana* untuk menciutkan lagi."""
+Tampilan default hanya nama grup. Ketuk *Rinci* untuk memperluas daftar dan menampilkan ID chat tiap grup di samping namanya. Ketuk *Ringkas* untuk menciutkan lagi."""
 
 [help.examples]
 body = "`/tcgroups` `/tcg`"

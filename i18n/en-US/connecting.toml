@@ -36,8 +36,9 @@ When the bot is first added to a group, it automatically prompts the group owner
 [help.examples]
 body = "Make the bot a group admin, then run `/tcconnect` inside the group."
 
-# Runtime strings for the connect flow (connected_flow.py).
-# All send plain (no parse_mode): plain=True at call sites.
+# Runtime strings for the connect flow (connect_added.py,
+# connect_decision.py, connect_replay.py, and connect_common.py).
+# Notices use plain=True; verification pages render as rich blocks.
 # Placeholders: {community} raw community name.
 
 [state]

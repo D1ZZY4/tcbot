@@ -18,10 +18,10 @@ decision document.
 Ownership: the command entry lives in `bans.py`; the flat modules
 `ban_executor.py`, `ban_conversation.py`, `ban_proof_handlers.py`, and
 `ban_session.py` own execution, the conversation factory, proof handlers, and
-the proof-session registry. `ban_confirmation.py` and `ban_rules_step.py` own
-the freshness guard and rules picker; `proof_steps.py` owns the shared proof
-prompt. Durable delivery lives in `moderation_enforcement.py`; persistence lives in
-`bans_db/` and `moderation_db.py`.
+the proof-session registry. `ban_confirmation.py` owns the re-ban freshness
+guard; `proof_steps.py` owns the shared proof prompt. Durable delivery lives in
+`moderation_enforcement.py`; persistence lives in `bans_db/` and
+`moderation_db.py`.
 
 ## Commands and access
 
@@ -46,14 +46,9 @@ fail fast before any role lookup. See
 ```mermaid
 stateDiagram-v2
     [*] --> WAITING_UPDATE_CONFIRM: active ban found and re-ban offered
-    [*] --> WAITING_BAN_RULES: reason inline and rules picker available
-    [*] --> WAITING_PROOF: reason inline and no picker
-    WAITING_UPDATE_CONFIRM --> WAITING_BAN_RULES: ban_continue from live prompt
+    [*] --> WAITING_PROOF: reason inline
+    WAITING_UPDATE_CONFIRM --> WAITING_PROOF: ban_continue from live prompt
     WAITING_UPDATE_CONFIRM --> [*]: ban_cancel
-    WAITING_BAN_RULES --> WAITING_BAN_RULES_NOTE: rules_step:other
-    WAITING_BAN_RULES_NOTE --> WAITING_PROOF: note accepted
-    WAITING_BAN_RULES --> WAITING_PROOF: rules_step:done
-    WAITING_BAN_RULES --> [*]: rules_step:cancel
     WAITING_PROOF --> COLLECT: media arrives
     COLLECT --> WAITING_PROOF: more media
     WAITING_PROOF --> EXECUTE: Done tap silence window or 60s cap
@@ -65,26 +60,17 @@ stateDiagram-v2
 |---|---|---|
 | `WAITING_PROOF` | 0 | Collecting proof media. |
 | `WAITING_UPDATE_CONFIRM` | 1 | Confirming a re-ban of an active ban. |
-| `WAITING_BAN_RULES` | 2 | Picking published rules to cite. |
-| `WAITING_BAN_RULES_NOTE` | 3 | Entering an optional rules note. |
 
 | Callback | Effect |
 |---|---|
 | `ban_continue` | Continue a re-ban from a live prompt. |
 | `ban_cancel` | Cancel the prompt. |
 | `ban_done_proof` | Flush collected proof now. |
-| `rules_step:pick:<id>` | Toggle a published rule item. |
-| `rules_step:done` | Accept the selection and continue. |
-| `rules_step:other` | Enter a note. |
-| `rules_step:clear` | Clear the selection. |
 
-The rules picker is skipped when no rules are published or the moderator lacks
-`rules.view`. The re-ban confirmation shows existing and new reasons plus
-`View Log` and `View Proof` links. Prompt freshness is checked with
-`scope.callback_is_current()` using `ban_prompt_chat_id` and
-`ban_prompt_msg_id`, so a tap from an older prompt is discarded. The callback
-path through the rules picker records the id of the message it edits, so the
-freshness guard stays active there too.
+The re-ban confirmation shows existing and new reasons plus `View Log` and
+`View Proof` links. Prompt freshness is checked with `scope.callback_is_current()`
+using `ban_prompt_chat_id` and `ban_prompt_msg_id`, so a tap from an older
+prompt is discarded.
 
 ## Entry to proof collection
 
@@ -97,13 +83,8 @@ flowchart TD
     REASON --> SAVE[write BAN_USER_DATA_KEYS to flow scope]
     SAVE --> OLD{get_active_ban}
     OLD -->|found| CONF[WAITING_UPDATE_CONFIRM with ban_continue and ban_cancel]
-    CONF -->|ban_continue| RULES{show_ban_rules}
-    OLD -->|none| RULES
-    RULES -->|picker available| PICK[WAITING_BAN_RULES]
-    RULES -->|no permission or no rules| PROOF[WAITING_PROOF]
-    PICK -->|rules_step:done| PROOF
-    PICK -->|rules_step:other| NOTE[WAITING_BAN_RULES_NOTE]
-    NOTE --> PROOF
+    CONF -->|ban_continue| PROOF[WAITING_PROOF]
+    OLD -->|none| PROOF
 ```
 
 The active-ban lookup fails closed: an outage replies with the database retry
@@ -111,10 +92,9 @@ notice and clears the flow scope instead of degrading into a fresh ban that
 wastes a proof round.
 
 `ban_confirmation.py` owns `stale_ban_callback()`. `on_ban_update_continue()`
-answers the query, re-checks the tapper with `recheck_executor_rank(min_role="developer")`,
-then delegates to `show_ban_rules()`. The picker stores selections in
-`ban_rules` and the note in `ban_rules_note`, and reads
-`rules_db.published_rules()`.
+answers the query, re-checks the tapper with
+`recheck_executor_rank(min_role="developer")`, and continues to proof
+collection.
 
 ## Proof flush
 
@@ -199,8 +179,8 @@ sequenceDiagram
 ```
 
 `create_ban()` and `update_ban()` write the decision, open and close its case,
-archive proof, link selected rules, and queue the `apply` run with idempotency
-key `moderation:{action_id}:apply:v1` in one transaction. A unique partial index
+archive proof, and queue the `apply` run with idempotency key
+`moderation:{action_id}:apply:v1` in one transaction. A unique partial index
 permits one active ban per user; the loser of an insert race reuses or supersedes
 the canonical record, so the log, appeal link, and target button all name the
 surviving record.
@@ -284,7 +264,6 @@ new ban and `proof_caption_update` for a re-ban.
 | `_execute_ban_record` | `ban_executor.py` | Decision write and federation log. |
 | `on_ban_update_continue` | `ban_confirmation.py` | Re-ban confirmation handler. |
 | `stale_ban_callback` | `ban_confirmation.py` | Prompt freshness guard. |
-| `show_ban_rules` | `ban_rules_step.py` | Rules picker entry. |
 | `demote_before_enforcement` | `demote_actions.py` | Best-effort pre-fanout demote. |
 | `run_once`, `deliver_queued_run` | `moderation_enforcement.py` | Durable delivery. |
 

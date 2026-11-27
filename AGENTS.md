@@ -105,8 +105,10 @@ representation.
   `rich/edit_msg.py` (`edit_rich` and the safe-edit helpers), and forwards through
   `rich/forward_msg.py` (`forward_rich`). Every send uses a
   `rich_message` payload. Rich buttons may sit in a `<tg-button-row>` after the
-  content or inside a table cell via a raw `TableCell`; markup cells that cannot
-  be expressed as rich buttons keep their inline representation.
+  content or inside a table cell via a raw `TableCell`; markup that cannot be
+  expressed as rich buttons is dropped with an ERROR, never sent as a second
+  native representation. Removing an existing keyboard is a separate,
+  keyboard-only Telegram primitive that carries no message content.
 - Shared markup helpers (`esc`, `bold`, `code`, `user_ref`, and the rest) and
   localized wording come from `tcbot/utils/i18n.py`.
 - Plain notices and callback alerts are rendered with `plain=True`, so Telegram
@@ -291,7 +293,6 @@ Current stack:
 │       ├── pagination.py      Page arithmetic (clamp_page) for paged views
 │       ├── prefixes.py        Command prefix resolution
 │       ├── redaction.py       Credential-shape redaction shared by console and reports
-│       ├── secrets.py         Constant-time secret comparison for inbound credentials
 │       ├── tasks.py           Background task lifecycle owner (TaskTracker)
 │       ├── time_and_date.py    Central clock: UTC store/display + measure + durations
 │       ├── transport.py        Shared Telegram lookup timeout budget

@@ -44,8 +44,8 @@ Jika disetujui: ban dicabut segera di semua grup terhubung.
 Jika ditolak: ban tetap berlaku.
 Kamu akan diberi tahu bot dalam kedua kasus."""
 
-# Runtime strings for appeal submission (appeal_submit_flow.py).
-# All send plain (PM replies, alerts, plain edits): plain=True.
+# Runtime strings for appeal submission (appeal_submit.py).
+# Notices use plain=True; the instruction panel renders as rich HTML.
 # Placeholders: {hours}/{remaining}/{max} ints, {community}/{handle}
 # raw config values, {log_link} a preformatted link to the ban log message.
 

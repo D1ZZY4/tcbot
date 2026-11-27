@@ -43,7 +43,7 @@ body = """
 `/tcunmute @username` lift mute immediately across all groups
 Or reply to a message and run `/tcm`."""
 
-# Runtime strings for the mute/unmute executors (mute_flow.py).
+# Runtime strings for the mute/unmute executors (mute_executor.py).
 # [note] plain sends use plain=True; [summary]/[unmute] render rich HTML.
 # [applied] renders the unmute fan-out line, [muted] the mute fan-out line;
 # {applied} carries the chosen line whole.

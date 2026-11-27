@@ -76,7 +76,8 @@ each key documents its send path in the catalog.
 | `lang:set:(user\|group):<code>` | Save the locale and show a confirmation. |
 
 Changing the group scope requires `can_manage_group(..., fresh=True)` and a
-connected group. Group writes use `groups_db.set_group_locale()`; personal
+connected group, the primary group, or a deployment-owned destination. Group
+writes use `groups_db.set_group_locale()`; personal
 writes use `settings_db.set_user_locale()`. Both invalidate every cache layer
 so the change reaches other processes through Redis L2. Alerts render in the
 tapper's current locale, not the target locale, because the target may be
@@ -92,8 +93,8 @@ as rich markup. Module display names stay English identifiers.
 
 ## Edge cases
 
-- A missing key falls back to `en-US` per key; a key missing everywhere logs an
-  error and renders as a bracketed key.
+- Every locale must define every key; catalog parity is enforced by the test
+  suite. A key missing everywhere logs an error and renders as a bracketed key.
 - A stale locale in a callback is checked against the actual scope and refused.
 - A locale change in one process reaches the others through the Redis L2 cache.
 

@@ -70,7 +70,7 @@ body = """
 `/tcpromoterequests` minta promosi ke Admin
 `/tcplist` daftar permintaan promosi tertunda"""
 
-# Runtime strings for promotion (promote_flow.py).
+# Runtime strings for promotion (promote_request.py and promote_steps.py).
 # Setiap permukaan dirender sebagai rich HTML lewat transport rich.
 # Placeholder: {user} referensi pengguna yang sudah terformat, {role}/{label}/
 # {community} nilai mentah yang di-escape sekali oleh renderer.
@@ -108,8 +108,8 @@ anon_admin = "Perintah ini harus dikirim dari akun pribadimu, bukan sebagai grup
 already_role = "Kamu sudah {role}, tidak perlu minta."
 existing = "Kamu sudah punya permintaan tertunda (ID: {id})."
 
-# Shared admin error strings. All send plain (parse_mode=None replies,
-# plain edits, alerts): plain=True at call sites.
+# Shared admin error strings. All render as plain notices: plain=True
+# at call sites.
 
 [error]
 no_assign_perms = "Kamu tidak punya izin untuk memberi peran apa pun."

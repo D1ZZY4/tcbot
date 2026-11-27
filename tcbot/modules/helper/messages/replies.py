@@ -48,7 +48,7 @@ class HelpEntry(TypedDict):
 
 
 def target_syntax(locale: str | None = None) -> str:
-    """Target-syntax help body in the render locale (V2-escaped)."""
+    """Target-syntax help body in the render locale."""
     return t("common.target.syntax", locale, plain=False)
 
 
@@ -104,7 +104,7 @@ def err_db_retry(locale: str | None = None, *, plain: bool) -> str:
 
 
 # ──────────────────────── Context / Scope ───────────────────────── #
-# * V2-escaped bodies for help "Where" sections.
+# * Rich-rendered bodies for help "Where" sections.
 
 
 def context_bot_or_group(locale: str | None = None) -> str:

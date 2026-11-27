@@ -74,8 +74,6 @@ sequenceDiagram
     User->>Flow: Valid #appeal text
     Flow->>Appeals: forward_rich(msg, appeal_chat, message_thread_id)
     Appeals-->>Flow: appeal_msg_id
-    Flow->>DB: get_ban ban_id for linked rules
-    DB-->>Flow: rules
     Flow->>Group: send_text(appeal_received_log)
     Group-->>Flow: review_msg_id
     Flow->>Appeals: send_text(card, reply_markup=appeal_review_btn)
@@ -241,7 +239,7 @@ retry budget.
 
 | Builder in `modules/helper/messages/audit_logs.py` | Used for |
 |---|---|
-| `appeal_received_log(target_id, target_fname, ban_id, appeal_link, rules)` | Review card in MAIN_GROUP and the APPEALS copy. |
+| `appeal_received_log(target_id, target_fname, ban_id, appeal_link, appeal_excerpt="")` | Review card in MAIN_GROUP and the APPEALS copy. |
 | `appeal_submitted_log(target_id, target_fname, ban_id, appeal_link)` | Initial log posted with `send_log`. |
 | `appeal_approved_edit(...)` | Edited log after approval. |
 | `appeal_rejected_edit(...)` | Edited log after rejection. |

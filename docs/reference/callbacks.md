@@ -101,7 +101,8 @@ danger-styled row on every page.
 Which builder emits each callback, its color, and its label key are in
 [buttons.md](buttons.md). That page also owns the rich-button action types,
 the 64-byte callback limit, the semantic color palette, the all-or-nothing
-inline fallback, and the rule that every label lives once in `button.toml`.
+keyboard drop for unconvertible markup, and the rule that every label lives
+once in `button.toml`.
 This page stays focused on the payload grammar and the state registry.
 
 ## Parsing and freshness

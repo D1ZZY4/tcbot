@@ -35,7 +35,7 @@ access_retry = "I couldn't verify your access right now. Please try again in a m
 staff_only = "This panel is for TC Staff only."
 db_fail = "Could not load the data. The database is unreachable, try again in a bit."
 
-# Runtime strings for stats views (stats_flow.py). All render rich HTML
+# Runtime strings for stats views (stats_panels.py). All render rich HTML
 # except button labels (plain). Placeholders as documented per key.
 
 [button]

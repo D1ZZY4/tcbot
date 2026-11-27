@@ -15,7 +15,7 @@ target emits `identity.staff_notice()` but the warning still proceeds.
 
 The conversation is built by `warn_conversation()` with
 `BuildReason("warn", skip_allowed=False)`, `BuildProof("warn")`,
-`min_role="moderator"`, and `rules_enabled=True`. An escape filter keeps
+and `min_role="moderator"`. An escape filter keeps
 `/tcunwarn`, `/warns`, and `/resetwarns` out of the reason fallback. The executor
 adapter `_exec_warn()` pops the warn keys and calls `execute_warn()`.
 
@@ -24,10 +24,6 @@ adapter `_exec_warn()` pops the warn keys and calls `execute_warn()`.
 | `warn_cancel` | Cancel the live warn prompt. |
 | `warn_done_proof` | Flush collected proof and execute. |
 | `warn_skip_proof` | Execute without proof. |
-| `rules_step:pick:<id>` | Toggle a rules selection. |
-| `rules_step:done` | Confirm selection. |
-| `rules_step:other` | Enter an optional note. |
-| `rules_step:clear` | Clear selection. |
 
 ## Filing a warning
 
@@ -35,8 +31,8 @@ adapter `_exec_warn()` pops the warn keys and calls `execute_warn()`.
 and uploads optional proof before filing. `warns_db.add_warn()` takes a
 user-wide advisory lock and then a per-chat lock, opens a case, archives optional
 proof, inserts a completed `warn` decision with an expiry derived from
-`cfg.warn_expiry_days`, links rules, closes the case, and reads the count from
-the `warn_counts` view in the same transaction.
+`cfg.warn_expiry_days`, closes the case, and reads the count from the
+`warn_counts` view in the same transaction.
 
 ```mermaid
 sequenceDiagram
@@ -48,7 +44,7 @@ sequenceDiagram
     Flow->>Bot: upload_proof_for_action optional
     Flow->>Guard: enforcement_refusal again after proof
     Flow->>DB: add_warn under user and chat advisory locks
-    DB->>DB: case, proof, decision, rules, close, count from view
+    DB->>DB: case, proof, decision, close, count from view
     DB-->>Flow: current group warn count
     Flow->>Bot: warn log and issued or threshold reply
 ```

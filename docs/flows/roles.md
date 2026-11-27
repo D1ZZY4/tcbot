@@ -196,7 +196,9 @@ sequenceDiagram
 ```
 
 `users_roles.transfer_ownership(previous_owner_id, new_owner_id)` runs in one
-transaction under advisory lock `_OWNER_TRANSFER_LOCK_KEY = 7_313_919_265_517_001`:
+transaction under the schema-scoped advisory lock named by
+`_OWNER_TRANSFER_LOCK_NAME = "tcbot:owner_transfer"` (hashed with
+`pg_advisory_xact_lock(hashtextextended(...))`):
 
 - The current owner is re-read under the lock. If it differs from the prompt's
   opener, the transfer raises and no role is modified.

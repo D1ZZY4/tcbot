@@ -242,18 +242,18 @@ def test_unknown_button_style_is_dropped() -> None:
     )
 
 
-def test_native_only_actions_stay_inline_for_both_markup_shapes() -> None:
+def test_native_only_actions_drop_the_whole_keyboard() -> None:
     """A profile or payment cell must not become a dead rich button."""
     native = {"inline_keyboard": [[{"text": "Pay", "pay": True}]]}
     assert rich_buttons.buttons_from_markup(native) is None
 
 
-def test_an_overlong_copy_button_falls_back_to_native_markup() -> None:
+def test_an_overlong_copy_button_drops_the_whole_keyboard() -> None:
     markup = {"inline_keyboard": [[{"text": "Copy", "copy_text": "x" * 257}]]}
     assert rich_buttons.buttons_from_markup(markup) is None
 
 
-def test_button_row_caps_eight_buttons_and_falls_back_to_native() -> None:
+def test_button_row_caps_eight_buttons_and_drops_an_overwide_keyboard() -> None:
     one = rich_buttons.button("x", data="go")
     assert rich_buttons.button_row([one] * 8).count("<tg-button ") == 8
     with pytest.raises(ValueError):
@@ -394,7 +394,7 @@ def test_blocks_preserves_a_standalone_anchor_block() -> None:
     assert rich_text.blocks(text) == text
 
 
-def test_nested_login_url_bot_username_stays_inline() -> None:
+def test_nested_login_url_bot_username_drops_the_keyboard() -> None:
     cell = {
         "text": "Login",
         "login_url": {"url": "https://x/login", "bot_username": "other_bot"},

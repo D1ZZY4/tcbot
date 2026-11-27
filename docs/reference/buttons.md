@@ -49,8 +49,8 @@ with the same alignment and drops empty rows.
 | Color | Style | Used for |
 |---|---|---|
 | Blue | `PRIMARY` | Default for actions, detail opens, navigation, and links. |
-| Green | `SUCCESS` | Positive commits and navigation: Approve, Agree, proof Done, rules Publish, Back, Prev, Next, and the selected locale. |
-| Red | `DANGER` | Destructive or rejecting actions and every Cancel: Reject, Demote Confirm, rules Delete, Discard, Close, destructive confirmations. |
+| Green | `SUCCESS` | Positive commits and navigation: Approve, Agree, proof Done, Back, Prev, Next, and the selected locale. |
+| Red | `DANGER` | Destructive or rejecting actions and every Cancel: Reject, Demote Confirm, Discard, Close, destructive confirmations. |
 | None | default | No remaining primary action; plain informational cells stay uncolored. |
 
 Older clients ignore the style field, so color is purely additive.
@@ -64,9 +64,9 @@ the error. Every cell action above has a rich equivalent, so a cell fails to map
 only when its `callback_data` exceeds 64 bytes, its text is not a string, or it
 carries an action outside the mapped set. A cell with no action is rendered as a
 disabled rich button. Payloads using `blocks` instead of `html` are not
-embedded. No native keyboard is ever sent alongside a rich message; clearing an
-old keyboard uses an explicit empty native markup because Telegram has no rich
-clear. There is no parse-mode send path.
+embedded. No native keyboard is ever sent alongside a rich message. Clearing an
+old keyboard is a separate keyboard-only primitive because Telegram has no rich
+clear; it carries no message content. There is no parse-mode send path.
 
 `table_cell(button("Go", data="go"), raw=True)` places an inline rich button
 inside a table cell. A raw cell is the explicit opt-in that keeps trusted button
@@ -95,7 +95,7 @@ both catalogs so the same action looks the same in every locale.
 | `🗟` | document preview | Preview |
 | `🕬` / `🗪` / `🗫` | announcement / discussion / appeals channel | Main Channel, Discussion Group, Appeals Channel |
 | `⌕` | search | Search, New Search |
-| `ⓘ` / `◈` | information | Help, Privacy Policy, Preview; About, Privacy, Rules |
+| `ⓘ` / `◈` | information | Help, Privacy Policy, Preview; About, Privacy |
 | `⌘` | locale | Language |
 
 Read-only menus (stats main, help index and section, privacy index) carry a
@@ -216,8 +216,8 @@ discarded. The freshness keys per call site and the payload parsers are listed
 in [callbacks.md](callbacks.md#parsing-and-freshness).
 
 Privileged callbacks re-authorize at tap time: role prompts carry the opener as
-an executor segment, stats panes re-check rank, and rules editor actions
-re-check `rules.manage`. See [Permissions](../flows/permissions.md).
+an executor segment, and stats and moderation panes re-check rank. See
+[Permissions](../flows/permissions.md).
 
 ## Validation
 

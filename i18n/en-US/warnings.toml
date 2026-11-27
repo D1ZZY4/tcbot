@@ -44,7 +44,7 @@ body = """
 `/resetwarns @username`
 Or reply to a message and run `/tcw`."""
 
-# Runtime strings for the warn executors (warning_flow.py).
+# Runtime strings for the warn executors (warn_executor.py).
 # [none]/[removed]/[list]/[cleared]/[fed_fail]/[issued]/[exempt]/
 # [autoban] render as rich HTML; db_retry sends plain.
 # Placeholders: {user} pre-formatted user reference, {reason} raw reason

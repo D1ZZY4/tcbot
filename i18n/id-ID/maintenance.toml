@@ -28,7 +28,7 @@ Menampilkan keputusan moderasi yang pengirimannya ke Telegram masih queued, runn
 body = """
 Mengantrekan permintaan penghapusan untuk satu akun Telegram. Sapuan pembersihan berikutnya menganonimkan profil, mencabut role dan tindakan moderasi yang aktif, lalu menghapus baris pribadi. Alasan wajib diisi dan dicatat di audit trail.
 
-*Pemakaian:* `/tcforget <user_id> <reason>`"""
+*Pemakaian:* `/tcforget <user_id> <alasan>`"""
 
 [help.examples]
 body = """

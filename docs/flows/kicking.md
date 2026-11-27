@@ -22,15 +22,14 @@ flowchart TD
     TOO_LONG -->|yes| STOP[reason_too_long_text and end]
     TOO_LONG -->|no| PROOF[WAITING_PROOF with noted prompt]
     REASON -->|no| RWAIT[WAITING_REASON prompt]
-    RWAIT --> PICK[WAITING_RULES when rules available]
-    PICK --> PROOF
+    RWAIT --> PROOF
     PROOF --> EXEC[on_done_proof claims execution slot]
 ```
 
 The conversation is built by `kick_conversation()` through
 `mod_action_steps.build_modaction_conv()` with `BuildReason("kick",
-skip_allowed=False)`, `BuildProof("kick")`, `min_role="moderator"`, and
-`rules_enabled=True`. The executor adapter `_exec_kick()` pops the kick keys
+skip_allowed=False)`, `BuildProof("kick")`, and `min_role="moderator"`. The executor adapter
+`_exec_kick()` pops the kick keys
 from the flow scope and calls `execute_kick()`.
 
 ## Conversation states and callbacks
@@ -39,18 +38,12 @@ from the flow scope and calls `execute_kick()`.
 |---|---|---|
 | `mod_action_steps.py` | `WAITING_REASON` | 0 |
 | `mod_action_steps.py` | `WAITING_PROOF` | 1 |
-| `mod_action_steps.py` | `WAITING_RULES` | 2 |
-| `mod_action_steps.py` | `WAITING_RULES_NOTE` | 3 |
 
 | Callback data | Meaning |
 |---|---|
 | `kick_cancel` | Cancel the live kick prompt. |
 | `kick_done_proof` | Flush collected proof and execute. |
 | `kick_skip_proof` | Execute without proof. |
-| `rules_step:pick:<id>` | Toggle a rules selection. |
-| `rules_step:done` | Confirm rules selection. |
-| `rules_step:other` | Enter an optional note. |
-| `rules_step:clear` | Clear selection. |
 
 Done and Skip claim the `kick_executing` flag in the flow scope before their
 first await, so a double tap cannot run the executor twice.

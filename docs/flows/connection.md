@@ -179,7 +179,7 @@ flowchart TD
     D2 --> OWN2{Protected Owner}
     OWN2 -->|yes| SKIP2[Skip mute; keep greeting]
     OWN2 -->|no| REST[restrict_chat_member until deadline]
-    M -->|no| W[Welcome in primary group with rules ack button for a new published version]
+    M -->|no| W[Welcome in primary group]
 ```
 
 `demote_before_enforcement()` returns a protected-owner verdict for the Owner
