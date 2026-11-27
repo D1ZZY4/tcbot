@@ -203,6 +203,11 @@ async def reject_appeal(ban_id: str, reviewer_id: int, reviewer_name: str) -> bo
             .where(
                 moderation_actions.c.external_ref == ban_id,
                 moderation_actions.c.action_type == "ban",
+                moderation_actions.c.status == "active",
+                # * A ban revoked or expired between the card tap and this
+                # * write must not record a rejection about a decision that
+                # * no longer exists. Approve already applies both guards.
+                _in_force(),
             )
             .with_for_update()
         )
