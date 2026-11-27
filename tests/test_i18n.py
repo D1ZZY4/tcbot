@@ -1104,6 +1104,10 @@ def test_markup_nesting_rejected() -> None:
         t("m", "en-US", catalog={"en-US": {"m": "`a {b}`"}}, b="x")
     with pytest.raises(I18nError):
         t("m", "en-US", catalog={"en-US": {"m": "~a *b* c~"}})
+    with pytest.raises(I18nError):
+        t("m", "en-US", catalog={"en-US": {"m": "`/x *bold* y`"}})
+    with pytest.raises(I18nError):
+        t("m", "en-US", catalog={"en-US": {"m": "`/x ~italic~ y`"}})
 
 
 def test_markup_sequential_pairs_parse() -> None:

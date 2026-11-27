@@ -22,7 +22,7 @@ Saat broadcast selesai, bot menampilkan ringkasan berapa grup menerima pesan dan
 [help.examples]
 body = """
 `/tcbroadcast Pengingat: tolong baca aturan komunitas.`
-`/bc *Acara malam ini* (gabung jam 8 malam UTC).`
+`/bc Acara malam ini (gabung jam 8 malam UTC).`
 Atau balas sebuah pesan lalu jalankan `/bc` untuk meneruskannya ke semua grup."""
 
 # Runtime strings (broadcasting.py). [no_content]/[done] render rich HTML;

@@ -22,7 +22,7 @@ When the broadcast is complete, the bot shows a summary of how many groups recei
 [help.examples]
 body = """
 `/tcbroadcast Reminder: please review the community rules.`
-`/bc *Event tonight* (join us at 8 PM UTC).`
+`/bc Event tonight (join us at 8 PM UTC).`
 Or reply to a message and run `/bc` to forward it to all groups."""
 
 # Runtime strings (broadcasting.py). [no_content]/[done] render rich HTML;

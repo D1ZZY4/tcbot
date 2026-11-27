@@ -354,6 +354,10 @@ def _render_template(
                 raise I18nError(f"i18n template {key!r} has an unbalanced backtick")
             inner = template[i + 1 : j]
             check_span(inner, "code")
+            if "`" in inner or "*" in inner or "~" in inner:
+                raise I18nError(
+                    f"i18n template {key!r} forbids nesting inside code spans"
+                )
             flush_literal()
             parts.append(f"<code>{esc(inner)}</code>" if escape else inner)
             i = j + 1
@@ -423,8 +427,10 @@ def t(
     """Render ``key`` for ``locale`` with safe placeholder interpolation.
 
     Templates are stored raw with `` `code` `` and ``*bold*`` mini-markup.
-    Rich mode renders HTML-escaped text with real tags; ``plain=True`` keeps
-    raw text for callback alerts, which Telegram never parses.
+    Rich mode renders HTML-escaped text with real tags. ``plain=True`` emits
+    raw catalog text for callback alerts and short notices; every send and
+    edit still carries a rich HTML payload, so a caller using that mode must
+    escape untrusted values itself.
     Unknown locales fall back to :data:`DEFAULT_LOCALE`; keys missing in
     the locale fall back per key. A key missing everywhere is a
     programming error: it is logged and returned as ``[key]``.
