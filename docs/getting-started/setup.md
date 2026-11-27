@@ -134,3 +134,9 @@ configured. See [CI/CD](../operations/ci-cd.md) for the workflows and
 4. Send `/start` in private chat and check the main menu.
 5. Set `MAIN_GROUP` to the primary group's negative chat id. The bot anchors it automatically; `/tcconnect` deliberately refuses it and the other infrastructure destinations.
 6. Post a test log action and confirm delivery to `LOGS`.
+
+If `MAIN_GROUP` is a basic group that later migrates to a supergroup, Telegram
+assigns a new chat id. The migration handler repoints the database rows and logs
+a warning, but the loaded configuration is immutable. Update `MAIN_GROUP` to the
+new supergroup id and restart the bot; until then join enforcement and
+chat-scoped moderation in that group are disabled.

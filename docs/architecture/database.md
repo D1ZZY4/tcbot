@@ -14,13 +14,15 @@ The project uses exactly three PostgreSQL schemas and no fourth.
 |---|---|---|
 | `public` | The deployment | Default schema; `DB_SCHEMA` defaults to it. |
 | `test` | Integration tests | Built and emptied by `tests/postgres_support.py`; never holds deployment data. |
-| `development` | A developer | Used by operator scripts and selected by `DB_SCHEMA=development`. |
+| `development` | A developer | Selected by `DB_SCHEMA=development`; operator scripts never rebuild or drop it. |
 
 `connection_options.schema_options()` pins `-c search_path=<DB_SCHEMA>` and
 `-c timezone=UTC` on every engine, including the migration connection and the
 APScheduler job store. Schema objects always land in the schema named by the
 search path, not the one `current_schema()` would fall back to. A missing
-schema is created at startup for non-public values.
+schema is created at startup for non-public values. Operator scripts use
+separate disposable schemas (`tcbot_schema_check`, `tcbot_migration_check`,
+`tcbot_guard_probe`) so a check never destroys a developer's `development` data.
 
 ## Engine and write boundary
 

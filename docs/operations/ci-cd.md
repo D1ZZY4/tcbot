@@ -23,8 +23,8 @@ Related pages: [setup](../getting-started/setup.md) and
 
 All three validation workflows install Python 3.14, install `uv`, run
 `uv sync --locked` with `UV_LOCKED=1` so a stale lockfile fails the build, and
-use dummy values for `BOT_TOKEN`, `DATABASE_URL`, and `OWNER_ID` so importing
-the package does not require real secrets.
+use dummy values for `BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID`, and `PROOFS` so
+importing the package does not require real secrets.
 
 - Ruff runs `ruff format --check .` and `ruff check .`. It also enforces the
   1,000-line file budget across `tcbot/` and checks that `import tcbot` works.

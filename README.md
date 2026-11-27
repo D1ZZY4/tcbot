@@ -182,8 +182,8 @@ Run exactly one live instance per token on exactly one target below. Every targe
 Seven CI workflows run automatically. The lint, type-check, test, auto-fix, dependency-update, and CodeQL workflows need no repository secrets (validation steps use dummy values, so fork PRs work too). The 24/7 Run Bot workflow is the exception: it needs the deployment secrets listed in the next section. The Python workflows set up Python 3.14 with cached `uv`; CodeQL uses `build-mode: none` and needs no Python or `uv` setup.
 
 - **Lint (Ruff)** (`lint-ruff.yml`), **Lint (Pyright)** (`lint-pyright.yml`), **Test (Pytest)** (`test-pytest.yml`): on push to `main`/`feat/**`/`fix/**` and PRs to `main`. Run `ruff format --check` + `ruff check` + the `import tcbot` check, `pyright`, and two Pytest passes respectively: a serial `pytest tests/ -q -m postgres` pass, then `pytest tests/ -q -m "not postgres" -n auto --cov=tcbot --cov-branch --cov-append`. Fail the PR subject to branch protection.
-- **Auto-Fix** (`auto-fix.yml`): same push/PR triggers plus weekly Monday 04:00 UTC and manual dispatch. Runs `ruff format` + `ruff check --fix`; outside a PR it force-pushes the fixed `auto-fix/ruff` branch and opens a PR, on a PR it comments the local fix commands instead. Needs `contents: write` + `pull-requests: write`.
-- **Dependency Updates** (`dependency-update.yml`): weekly Monday 04:00 UTC and manual dispatch. Runs `uv lock --upgrade`, validates with Ruff plus the import check, then opens a `deps/auto-update-YYYYMMDD` PR labeled `dependencies` against `main` (no-op when the lockfile is unchanged). Sends the owner a Telegram status DM when `BOT_TOKEN`/`OWNER_ID` secrets exist, silently skips otherwise.
+- **Auto-Fix** (`auto-fix.yml`): same push/PR triggers, completion of the Ruff and Pyright workflows, weekly Monday 04:00 UTC, and manual dispatch. Runs `ruff format` + `ruff check --fix`; outside a PR it force-pushes the fixed `auto-fix/ruff` branch and opens a PR, on a PR it comments the local fix commands instead. Needs `contents: write` + `pull-requests: write`.
+- **Dependency Updates** (`dependency-update.yml`): weekly Monday 04:00 UTC and manual dispatch. Runs `uv lock --upgrade`, validates with `ruff format --check`, `ruff check`, `pyright`, the import check, and the non-integration Pytest suite, then opens a `deps/auto-update-YYYYMMDD` PR labeled `dependencies` against `main` (no-op when the lockfile is unchanged). Sends the owner a Telegram status DM when `BOT_TOKEN`/`OWNER_ID` secrets exist, silently skips otherwise.
 - **CodeQL** (`codeql.yml`): on push/PR to `main` plus weekly Tuesday 15:38 UTC. Scans the `actions` and `python` languages with `build-mode: none`; findings land under the repository Security tab.
 - **Run Bot** (`run-bot.yml`): self-chaining 24/7 runner with Kurigram long polling, a watchdog, and a 15-minute cron resurrection fallback.
 
@@ -195,9 +195,9 @@ Mirror the gate locally before pushing: `uv run ruff format --check .`, `uv run 
 
 `.github/workflows/run-bot.yml` runs the bot in 5-hour windows (GitHub hard-caps a job at 6 h) with a crash watchdog, a handover dispatch about 10 minutes before the window ends, and a `*/15` cron resurrection fallback. A push to `main` touching bot code, translations, dependencies, or the runner itself queues a successor run and the live bot hands over gracefully within minutes; docs-only pushes never restart the bot.
 
-2. For gap-free chaining add `BOT_PAT`: a Personal Access Token with the `workflow` scope. Without it only the 15-minute cron restarts the bot.
-3. Actions → "TCF Bot - 24/7 Runner" → Run workflow (or wait for the schedule).
-4. Verify in the run logs (`Bot started`, `subsystems ready`); crash tails ship as credential-scrubbed artifacts kept 7 days.
+1. For gap-free chaining add `BOT_PAT`: a Personal Access Token with the `workflow` scope. Without it only the 15-minute cron restarts the bot.
+2. Actions → "TCF Bot - 24/7 Runner" → Run workflow (or wait for the schedule).
+3. Verify in the run logs (`Bot started`, `subsystems ready`); crash tails ship as credential-scrubbed artifacts kept 7 days.
 
 Fail-fast guard: 5 deaths within 10 minutes aborts the run (usually bad config); the cron recovers after you fix secrets. Full reference: [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md). Respect GitHub Actions usage limits and Terms of Service; this runner is a community convenience, not a hosting SLA.
 </details>
@@ -218,8 +218,8 @@ Single image without compose: `docker build -t tcf-bot .` then `docker run --env
 The repository ships no `Procfile`; deploy the existing `Dockerfile` through the container registry.
 
 1. `heroku create <app> && heroku stack:set container --app <app>` (or set the stack in Dashboard → Settings).
-3. `heroku container:push worker --app <app> && heroku container:release worker --app <app>`.
-4. `heroku ps:scale worker=1 --app <app>` and verify with `heroku logs --tail --app <app>`.
+2. `heroku container:push worker --app <app> && heroku container:release worker --app <app>`.
+3. `heroku ps:scale worker=1 --app <app>` and verify with `heroku logs --tail --app <app>`.
 
 Heroku assigns `PORT` automatically and the bot reads it from the environment. Keep exactly one `worker` dyno per token.
 </details>

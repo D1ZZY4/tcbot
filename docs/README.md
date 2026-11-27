@@ -73,7 +73,7 @@ state machine, database writes, Telegram delivery, failure paths, and exact name
 
 ### Releases
 
-Published release notes are immutable history under [releases/](releases/v7.1.0.md).
+Published release notes are immutable history under [v7.1.0](releases/v7.1.0.md).
 The root [CHANGELOG.md](../CHANGELOG.md) holds the unreleased section and the release index.
 
 ## Architecture at a glance

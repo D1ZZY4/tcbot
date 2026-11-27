@@ -148,7 +148,7 @@ another one, and never point the tooling at a fourth.
 |---|---|---|
 | `public` | The deployment | The default schema of the server. The bot reads and writes it when `DB_SCHEMA` is unset or set to `public`. |
 | `test` | The integration tests | The schema `tests/postgres_support.py` builds and empties. It never holds deployment data. |
-| `development` | A developer | The schema the operator scripts use against a shared server, and the schema `DB_SCHEMA=development` selects. |
+| `development` | A developer | The schema `DB_SCHEMA=development` selects for a developer working against a shared server. Operator scripts never rebuild or drop it. |
 
 Rules:
 
@@ -160,6 +160,9 @@ Rules:
 - A developer who works against a shared server sets
   `DB_SCHEMA=development`. The schema is created when it does not exist,
   and the migrations fill it.
+- Operator scripts use their own disposable schemas named `tcbot_*`
+  (`tcbot_schema_check`, `tcbot_migration_check`, `tcbot_guard_probe`).
+  They may drop and rebuild those schemas, never `development`.
 - The schema objects (the views, the functions, the triggers, the
   policies, and the reference data) always land in the schema the
   connection was pointed at. The schema is read from the search path,

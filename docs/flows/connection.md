@@ -15,7 +15,7 @@ bot's membership. Database failures fail closed.
 
 ```mermaid
 flowchart TD
-    CMD[/tcconnect in group] --> TYPE{group or supergroup}
+    CMD[/tcconnect in group] --> TYPE{group, supergroup, or forum}
     TYPE -->|no| NO[Reply group only]
     TYPE -->|yes| INFRA{Infrastructure chat}
     INFRA -->|yes| NO
@@ -59,7 +59,7 @@ bot-added, promoted, demoted, and removed handling.
 
 ```mermaid
 flowchart TD
-    E[MY_CHAT_MEMBER update] --> TYPE{group or supergroup}
+    E[MY_CHAT_MEMBER update] --> TYPE{group, supergroup, or forum}
     TYPE -->|no| IGNORE[Ignore]
     TYPE -->|yes| ST{New bot status}
     ST -->|LEFT or BANNED| DEACT[deactivate_group, remove_pending, optional log]

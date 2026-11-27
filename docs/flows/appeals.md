@@ -10,14 +10,16 @@ edit, and the unban continuation. The authorization gate is in
 
 | Entry | Filter or handler | Gate |
 |---|---|---|
-| Private deep link | `_APPEAL_START_CMDS` in `modules/appeals.py` matches `^/start\s+appeal_{REF_PATTERN}$` with `filters.private` | `appeal.build_handler`, entry `_on_entry`. |
+| Private deep link | `_APPEAL_START_CMDS` in `modules/appeals.py` matches `<prefix>start appeal_<ref>` for every configured prefix with `filters.private` | `appeal.build_handler`, entry `_on_entry`. |
 | Main-group tag | `MessageHandler(filters.text & ~ALL_PREFIXES_CMD_FILTER & filters.regex(r"(?i)^\s*#appeal"), on_group_appeal)` | `cfg.is_primary_group(chat.id)`, then the sender's active ban. |
 | Staff decision | `CallbackQueryHandler(on_appeal_decision, pattern=r"^appeal_(approve|reject)_\S+$")` | `THROTTLE_STAFF`, then `AppealReviewMixin.on_decision`. |
 
-`REF_PATTERN` is `r"[a-z0-9]{10,32}"`, and `_ID_RE` wraps it as
-`^/start\s+appeal_({REF_PATTERN})$`. The full range is accepted because an
-imported legacy decision carries a longer public reference. `starts_with_appeal_tag()`
-is case-insensitive and checks the stripped prefix `#appeal`.
+`REF_PATTERN` is `r"[a-z0-9]{10,32}"`, and `_ARG_PATTERN` wraps it as
+`appeal_({REF_PATTERN})`. `match_prefixed_arg()` in `utils/prefixes.py` is the
+single parser for both the handler filter and `_on_entry`, so every configured
+prefix works. The full reference range is accepted because an imported legacy
+decision carries a longer public reference. `starts_with_appeal_tag()` is
+case-insensitive and checks the stripped prefix `#appeal`.
 
 The group path ties the message to the sender's own active ban through
 `db.bans_db.get_active_ban(user.id)`; it stores `appeal_ban_id` and
