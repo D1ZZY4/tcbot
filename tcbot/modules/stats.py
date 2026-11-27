@@ -10,9 +10,9 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from pyrogram import ContinuePropagation, filters
-from pyrogram.types import CallbackQuery, Message
+from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
-from tcbot.modules.helper import decorators, guards
+from tcbot.modules.helper import buttons, decorators, guards
 from tcbot.modules.helper.context import Ctx, chat_id_of
 from tcbot.modules.helper.handlers import CallbackQueryHandler, MessageHandler
 from tcbot.modules.helper.locale import locale_for_update
@@ -42,6 +42,8 @@ from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
 from tcbot.utils.time_and_date import monotonic
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
     from tcbot.database.users_roles import RoleName
 
 log = get_logger(__name__)
@@ -72,6 +74,19 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
 
 
 __help__: replies.HelpEntry = get_help()
+
+
+async def _ack_stats(
+    q: CallbackQuery,
+    data_coro: Awaitable[tuple[str, InlineKeyboardMarkup | None]],
+    locale: str,
+) -> None:
+    """Render a stats pane, or a localized error card when enrichment fails."""
+    await ack_and_render(
+        q,
+        data_coro,
+        fallback=(t("stats.error.db_fail", locale), buttons.stats_back_btn(locale)),
+    )
 
 
 # ────────────────────────── Command entry ────────────────────────── #
@@ -338,9 +353,8 @@ async def on_stats_search_back(ctx: Ctx) -> None:
         previous_query = (
             ctx.user_data.get("stats_last_query", "") if ctx.user_data else ""
         )
-        await ack_and_render(
-            q,
-            Stats.search_results(previous_query, results, locale),
+        await _ack_stats(
+            q, Stats.search_results(previous_query, results, locale), locale
         )
 
 
@@ -355,7 +369,7 @@ async def on_stats_search_cancel(ctx: Ctx) -> None:
     if locale is None:
         return
     Stats.clear_search(ctx)
-    await ack_and_render(q, Stats.bans_list(0, locale))
+    await _ack_stats(q, Stats.bans_list(0, locale), locale)
 
 
 # ────────────────────────── Drill-down callbacks ───────────────────── #
@@ -369,13 +383,12 @@ async def on_stats_main(ctx: Ctx) -> None:
     if q is None:
         return
     tapper = ctx.effective_user
+    locale = await locale_for_update(ctx)
     Stats.clear_search(ctx)
-    await ack_and_render(
+    await _ack_stats(
         q,
-        Stats.main(
-            viewer_id=tapper.id if tapper is not None else None,
-            locale=await locale_for_update(ctx),
-        ),
+        Stats.main(viewer_id=tapper.id if tapper is not None else None, locale=locale),
+        locale,
     )
 
 
@@ -390,7 +403,7 @@ async def on_stats_admins(ctx: Ctx) -> None:
     if locale is None:
         return
     Stats.clear_search(ctx)
-    await ack_and_render(q, Stats.staff_roster(locale, bot=ctx.bot))
+    await _ack_stats(q, Stats.staff_roster(locale, bot=ctx.bot), locale)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
@@ -412,7 +425,7 @@ async def on_stats_users(ctx: Ctx) -> None:
     if locale is None:
         return
     Stats.clear_search(ctx)
-    await ack_and_render(q, Stats.users_list(page, locale))
+    await _ack_stats(q, Stats.users_list(page, locale), locale)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
@@ -431,7 +444,7 @@ async def on_stats_chats(ctx: Ctx) -> None:
         return
     page = numbers[0]
     Stats.clear_search(ctx)
-    await ack_and_render(q, Stats.chats_list(page, locale))
+    await _ack_stats(q, Stats.chats_list(page, locale), locale)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
@@ -450,7 +463,7 @@ async def on_stats_bans(ctx: Ctx) -> None:
         return
     page = numbers[0]
     Stats.clear_search(ctx)
-    await ack_and_render(q, Stats.bans_list(page, locale))
+    await _ack_stats(q, Stats.bans_list(page, locale), locale)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

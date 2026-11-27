@@ -180,8 +180,8 @@ def test_each_media_kind_gets_its_own_rich_slideshow() -> None:
     htmls = [call[1].html for call in bot.calls]
     assert 'src="tg://photo?id=m0"' in htmls[0]
     assert 'src="tg://video?id=m0"' in htmls[1]
-    assert 'src="tg://document?id=m0"' in htmls[2]
-    assert 'src="tg://document?id=m0"' in htmls[3]
+    assert '<video src="tg://video?id=m0"></video>' in htmls[2]
+    assert '<tg-document src="tg://document?id=m0"></tg-document>' in htmls[3]
     assert all(html.endswith("</tg-slideshow>\ncap") for html in htmls)
     assert isinstance(bot.calls[1][1].media[0].media, InputMediaVideo)
     assert isinstance(bot.calls[2][1].media[0].media, InputMediaAnimation)

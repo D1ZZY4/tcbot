@@ -4,11 +4,12 @@
 
 """Rich media blocks: photo, video, audio, document, slideshow and collage.
 
-A slideshow references media supplied in ``InputRichMessage.media`` through
-``tg://photo|video|document|audio?id=`` links. Proof posts use that single rich
-path, so no plain media upload runs alongside it. The id shape follows
-Kurigram's ``InputRichMessageMedia.id`` contract: 1-64 characters of
-``A-Za-z0-9_-``.
+A slideshow references media supplied in ``InputRichMessage.media``. Photo uses
+``tg://photo?id=``, video and animation both use the ``<video>`` tag with
+``tg://video?id=``, document uses ``<tg-document>`` with ``tg://document?id=``,
+and audio uses ``tg://audio?id=``. Proof posts use that single rich path, so no
+plain media upload runs alongside it. The id shape follows Kurigram's
+``InputRichMessageMedia.id`` contract: 1-64 characters of ``A-Za-z0-9_-``.
 """
 
 from __future__ import annotations
@@ -67,11 +68,12 @@ def _embedded(media_id: str, kind: str) -> str:
         raise ValueError(f"Unsupported rich media kind: {kind}")
     if kind == "photo":
         return f'<img src="tg://photo?id={media_id}"/>'
-    if kind == "video":
+    if kind in ("video", "animation"):
+        # * Bot API maps animation to the video tag; there is no tg://animation.
         return f'<video src="tg://video?id={media_id}"></video>'
     if kind == "audio":
         return f'<audio src="tg://audio?id={media_id}"></audio>'
-    return f'<img src="tg://document?id={media_id}"/>'
+    return f'<tg-document src="tg://document?id={media_id}"></tg-document>'
 
 
 def collage(

@@ -301,6 +301,13 @@ def test_media_module_owns_media_and_slideshow() -> None:
         '<tg-slideshow><img src="tg://photo?id=m0"/>'
         '<video src="tg://video?id=m1"></video></tg-slideshow>'
     )
+    assert rich_media.slideshow([("m0", "animation")]) == (
+        '<tg-slideshow><video src="tg://video?id=m0"></video></tg-slideshow>'
+    )
+    assert rich_media.slideshow([("m0", "document")]) == (
+        '<tg-slideshow><tg-document src="tg://document?id=m0"></tg-document>'
+        "</tg-slideshow>"
+    )
 
 
 def test_focused_modules_stay_distinct() -> None:

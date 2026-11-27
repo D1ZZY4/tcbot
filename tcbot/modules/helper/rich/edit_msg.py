@@ -235,13 +235,31 @@ async def answer_and_edit(q: CallbackQuery, text: str, **kwargs: Any) -> None:
 
 
 async def ack_and_render(
-    q: CallbackQuery, data_coro: Awaitable[tuple[str, InlineKeyboardMarkup | None]]
+    q: CallbackQuery,
+    data_coro: Awaitable[tuple[str, InlineKeyboardMarkup | None]],
+    *,
+    fallback: tuple[str, InlineKeyboardMarkup | None] | None = None,
 ) -> None:
-    """Acknowledge the callback query and run the data coroutine in parallel."""
+    """Acknowledge the callback query and run the data coroutine in parallel.
+
+    A failed render leaves the panel unchanged. A caller that can supply a
+    localized error card passes it as *fallback*; callers without one keep the
+    existing silent behavior.
+    """
     ans, result = await asyncio.gather(answer_ack(q), data_coro, return_exceptions=True)
     throw_if_cancelled((ans, result))
     if isinstance(result, BaseException):
         log.error("ack_and_render data fetch failed: %s", result)
+        if fallback is not None:
+            error_text, error_btn = fallback
+            await safe_edit_cb(
+                q,
+                error_text,
+                reply_markup=error_btn,
+                log_level="debug",
+                log_label="ack_and_render fallback",
+                catch_all=True,
+            )
         return
     text, btn = result
     await safe_edit_cb(q, text, reply_markup=btn)
