@@ -106,6 +106,49 @@ def build_prefixed_filters(command: str) -> Filter:
     )
 
 
+def match_prefixed_arg(
+    text: str,
+    command: str,
+    args_pattern: str,
+    *,
+    bot_username: str | None = None,
+) -> re.Match[str] | None:
+    """Parse ``<prefix><command> <args>`` under every configured prefix.
+
+    Deep links such as ``start appeal_<ref>`` must work with the same
+    prefixes as ordinary commands. The argument expression is matched in
+    full, so a longer or shorter payload never reaches the flow by accident.
+    """
+    chosen = tuple(sorted(_get_prefixes(), key=len, reverse=True))
+    parsed = _parse_prefixed_command(text, chosen, bot_username)
+    if parsed is None or parsed[0] != command.lower():
+        return None
+    prefix = next((p for p in chosen if text.startswith(p)), None)
+    if prefix is None:
+        return None
+    parts = text[len(prefix) :].split(None, 1)
+    if len(parts) != 2:
+        return None
+    return re.fullmatch(args_pattern, parts[1])
+
+
+def build_prefixed_arg_filters(command: str, args_pattern: str) -> Filter:
+    """Return a filter for ``<prefix><command> <args>`` on every prefix."""
+
+    async def check(_: Filter, client: Client, update: object) -> bool:
+        text = getattr(update, "text", None)
+        if text is None:
+            return False
+        text = str(text)
+        username = _bot_username(client) if "@" in text else None
+        return (
+            match_prefixed_arg(text, command, args_pattern, bot_username=username)
+            is not None
+        )
+
+    return filters.create(check, name=f"PrefixedCommandArgs({command})")
+
+
 def _PrefixedCommandFilter(command: str, prefixes: list[str] | None = None) -> Filter:
     """Build a native filter for one command under the configured prefixes."""
     chosen = prefixes if prefixes is not None else _get_prefixes()

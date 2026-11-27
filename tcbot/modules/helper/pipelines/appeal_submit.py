@@ -41,6 +41,7 @@ from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import (
     ALL_PREFIXES_CMD_FILTER,
     build_conversation_escape_filter,
+    match_prefixed_arg,
 )
 from tcbot.utils.time_and_date import to_utc, utc_now
 
@@ -68,7 +69,7 @@ _SECONDS_PER_HOUR: int = 3600
 # * link that does not parse leaves the banned user without a way to
 # * appeal.
 REF_PATTERN: str = r"[a-z0-9]{10,32}"
-_ID_RE = re.compile(rf"^/start\s+appeal_({REF_PATTERN})$")
+_ARG_PATTERN = rf"appeal_({REF_PATTERN})"
 _APPEAL_STATE_KEYS: tuple[str, ...] = (
     "appeal_ban_id",
     "appeal_log_msg_id",
@@ -535,14 +536,18 @@ class AppealSubmitMixin(SubmitMessageMixin):
         return WAITING_APPEAL
 
     async def _on_entry(self, ctx: Ctx) -> int:
-        """Entry-point handler; parses the /start appeal deep link."""
+        """Entry-point handler; parses the start appeal deep link."""
         msg = ctx.effective_message
         if msg is None or msg.text is None:
             return ConversationHandler.END
-        m = _ID_RE.match(msg.text.strip())
-        if not m:
+        me = getattr(ctx.bot, "me", None)
+        username = (getattr(me, "username", None) or "").lstrip("@") or None
+        match = match_prefixed_arg(
+            msg.text.strip(), "start", _ARG_PATTERN, bot_username=username
+        )
+        if match is None:
             return ConversationHandler.END
-        return await self._start(ctx, m.group(1))
+        return await self._start(ctx, match.group(1))
 
     async def on_group_appeal(self, ctx: Ctx) -> None:
         """Handle #appeal in the main group via the DM submit path."""

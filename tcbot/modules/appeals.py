@@ -15,7 +15,7 @@ from tcbot.modules.helper.messages import replies
 from tcbot.modules.helper.pipelines.appeal_review import LOCK_HOURS
 from tcbot.modules.helper.pipelines.appeal_submit import REF_PATTERN, appeal
 from tcbot.utils.i18n import Safe, bold, pre, t
-from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
+from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_arg_filters
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -57,8 +57,8 @@ __help__: replies.HelpEntry = get_help()
 
 # ──────────────────────────── Handlers ──────────────────────────── #
 
-_APPEAL_START_CMDS = filters.private & filters.regex(
-    rf"^/start\s+appeal_{REF_PATTERN}$"
+_APPEAL_START_CMDS = filters.private & build_prefixed_arg_filters(
+    "start", rf"appeal_{REF_PATTERN}"
 )
 
 

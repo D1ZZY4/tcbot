@@ -18,6 +18,7 @@ from tcbot.modules.helper.handlers import ConversationHandler
 from tcbot.modules.helper.messages import (
     message_link,
     reply_rich,
+    safe_edit_message,
     send_log,
     send_text,
 )
@@ -118,9 +119,14 @@ async def post_appeal(
                     uid, display_name(user), ban_id, appeal_link
                 ),
             ),
-            ctx.bot.edit_message_reply_markup(
-                chat_id=cfg.main_group,
-                message_id=review_msg_id,
+            # * Attach the keyboard through the rich transport so the main
+            # * card gets rich buttons like the APPEALS copy. A raw
+            # * edit_message_reply_markup bypassed conversion entirely.
+            safe_edit_message(
+                ctx.bot,
+                cfg.main_group,
+                review_msg_id,
+                review_text,
                 reply_markup=review_btn,
             ),
             return_exceptions=True,

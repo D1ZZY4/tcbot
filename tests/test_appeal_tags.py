@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import inspect
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -18,13 +19,14 @@ from pyrogram.types import Chat, Message
 
 from tcbot import cfg
 from tcbot.modules import appeals
-from tcbot.modules.helper.pipelines import appeal_submit
+from tcbot.modules.helper.pipelines import appeal_post, appeal_submit
 from tcbot.modules.helper.pipelines.appeal_submit import (
     WAITING_APPEAL,
     handle_group_appeal,
     starts_with_appeal_tag,
     text_references_log_message,
 )
+from tcbot.utils.prefixes import match_prefixed_arg
 
 
 def test_appeal_tag_case_insensitive_and_padded() -> None:
@@ -124,3 +126,32 @@ def test_appeal_deep_link_accepts_every_valid_reference() -> None:
 def test_appeal_deep_link_rejects_an_invalid_reference() -> None:
     assert not _matches(appeals._APPEAL_START_CMDS, _appeal_update("a" * 9))
     assert not _matches(appeals._APPEAL_START_CMDS, _appeal_update("a" * 33))
+
+
+def test_main_review_card_keyboard_uses_the_rich_transport() -> None:
+    """The APPEALS copy and the main card must take the same rich path."""
+    source = Path(inspect.getfile(appeal_post)).read_text(encoding="utf-8")
+    assert "ctx.bot.edit_message_reply_markup(" not in source
+    assert "safe_edit_message(" in source
+
+
+@pytest.mark.parametrize("prefix", ["/", "!", "."])
+def test_appeal_deep_link_accepts_every_configured_prefix(prefix: str) -> None:
+    message = Message(
+        id=1,
+        chat=Chat(id=1, type=ChatType.PRIVATE),
+        text=f"{prefix}start appeal_abcd1234ef",
+    )
+    assert _matches(appeals._APPEAL_START_CMDS, message) is True
+
+
+def test_appeal_entry_parses_a_non_slash_prefix() -> None:
+    """The entry parser and the handler filter share one prefix-aware owner."""
+    for prefix in ("/", "!", "."):
+        match = match_prefixed_arg(
+            f"{prefix}start appeal_abcd1234ef",
+            "start",
+            appeal_submit._ARG_PATTERN,
+        )
+        assert match is not None
+        assert match.group(1) == "abcd1234ef"
