@@ -168,6 +168,8 @@ def test_port_falls_back_to_default_for_invalid_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An unusable PORT never reaches the keep-alive server."""
+    # * "auto" is not a setting: Compose maps the raw value into its port
+    # * mapping, so it must fall back here instead of being documented as valid.
     assert _load(monkeypatch, PORT="auto").port == 5000
     assert _load(monkeypatch, PORT="70000").port == 5000
     assert _load(monkeypatch, PORT="not-a-port").port == 5000

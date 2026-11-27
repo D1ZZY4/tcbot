@@ -101,8 +101,11 @@ def parse_list(raw: str) -> list[str]:
 
 
 def parse_port(port_str: str) -> int:
-    """Resolve a port string; ``auto`` or invalid defaults to 5000."""
-    if not port_str or port_str.lower() == "auto":
+    """Resolve a port string; blank or invalid values default to 5000."""
+    # * Only a decimal port is a valid setting. "auto" used to be accepted
+    # * here while Compose interpolated the raw string into its port mapping,
+    # * so the process listened on 5000 while Compose mapped "auto:auto".
+    if not port_str:
         return _DEFAULT_PORT
     try:
         port = int(port_str)
