@@ -18,6 +18,7 @@ from sqlalchemy.engine import make_url
 
 from alembic import command
 from tcbot.database.base import metadata
+from tcbot.database.connection_options import advisory_scope
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -34,7 +35,7 @@ _ALEMBIC_INI = _ROOT / "alembic.ini"
 # * Boot serialisation: two instances starting together must not apply the
 # * same revision concurrently. The lock is session-scoped on a dedicated
 # * connection, so it is released on unlock and on a dropped connection.
-_MIGRATION_LOCK_KEY: int = 7_313_919_265_517_002
+_MIGRATION_LOCK_NAME: str = "tcbot:migrations"
 _MIGRATION_CONNECT_TIMEOUT_S: int = 10
 # * A schema name reaches the server as part of a connection option and of a
 # * CREATE SCHEMA statement, so the helper refuses anything that is not a
@@ -146,7 +147,7 @@ def scoped_url(database_url: str, schema: str) -> str:
 
 
 @contextlib.contextmanager
-def _migration_lock(database_url: str) -> Iterator[None]:
+def _migration_lock(database_url: str, schema: str) -> Iterator[None]:
     """Serialise concurrent migration runs on one PostgreSQL advisory lock.
 
     The lock is session-scoped on a dedicated connection, so it is released
@@ -161,15 +162,16 @@ def _migration_lock(database_url: str) -> Iterator[None]:
     try:
         with lock_engine.connect() as conn:
             conn.execute(
-                text("SELECT pg_advisory_lock(:key)"), {"key": _MIGRATION_LOCK_KEY}
+                text("SELECT pg_advisory_lock(hashtextextended(:scope, 0))"),
+                {"scope": advisory_scope(schema, _MIGRATION_LOCK_NAME)},
             )
             conn.commit()
             try:
                 yield
             finally:
                 conn.execute(
-                    text("SELECT pg_advisory_unlock(:key)"),
-                    {"key": _MIGRATION_LOCK_KEY},
+                    text("SELECT pg_advisory_unlock(hashtextextended(:scope, 0))"),
+                    {"scope": advisory_scope(schema, _MIGRATION_LOCK_NAME)},
                 )
                 conn.commit()
     finally:
@@ -191,5 +193,5 @@ def upgrade_head(database_url: str, schema: str | None = None) -> None:
     set_database_url(config, database_url)
     if schema:
         config.set_main_option("db_schema", schema)
-    with _migration_lock(database_url):
+    with _migration_lock(database_url, schema or "public"):
         command.upgrade(config, "head")

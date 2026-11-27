@@ -13,6 +13,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
 
+from tcbot import cfg
 from tcbot.database.base import (
     permission_definitions,
     role_assignments,
@@ -22,6 +23,7 @@ from tcbot.database.base import (
 )
 from tcbot.database.cache import effective_role_cache, owner_id_cache
 from tcbot.database.cache.singletons import _OWNER_KEY
+from tcbot.database.connection_options import advisory_scope
 from tcbot.database.documents import AdminDoc, RoleRefDoc
 from tcbot.database.engine import (
     db_call,
@@ -44,10 +46,10 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-# * Advisory lock key for the owner transfer. Any fixed value works as long
-# * as it is unique among the locks this application takes; it is scoped
-# * to the transaction, so it is released on commit and on rollback.
-_OWNER_TRANSFER_LOCK_KEY: int = 7_313_919_265_517_001
+# * Advisory lock name for the owner transfer. The scope adds the deployment
+# * schema at use time, so two instances sharing one PostgreSQL database but
+# * using different project schemas cannot serialize each other's transfers.
+_OWNER_TRANSFER_LOCK_NAME: str = "tcbot:owner_transfer"
 
 # ────────────────────── Role hierarchy tables ───────────────────── #
 # * Numeric ranks compare executor vs target; labels render to humans.
@@ -233,8 +235,8 @@ async def ensure_initial_owner(initial_id: int) -> None:
 
     async def _work(sess: AsyncSession) -> int:
         await sess.execute(
-            text("SELECT pg_advisory_xact_lock(:key)"),
-            {"key": _OWNER_TRANSFER_LOCK_KEY},
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
+            {"scope": advisory_scope(cfg.db_schema, _OWNER_TRANSFER_LOCK_NAME)},
         )
         existing_owner = await sess.scalar(
             select(role_assignments.c.user_id)
@@ -314,8 +316,8 @@ async def set_owner(user_id: int) -> None:
     # * the next restart.
     async def _work(sess: AsyncSession) -> None:
         await sess.execute(
-            text("SELECT pg_advisory_xact_lock(:key)"),
-            {"key": _OWNER_TRANSFER_LOCK_KEY},
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
+            {"scope": advisory_scope(cfg.db_schema, _OWNER_TRANSFER_LOCK_NAME)},
         )
         # * A user holds one active role, so every active assignment of
         # * the new owner is revoked before the owner row is written. A
@@ -419,8 +421,8 @@ async def transfer_ownership(previous_owner_id: int, new_owner_id: int) -> None:
 
     async def _work(sess: AsyncSession) -> None:
         await sess.execute(
-            text("SELECT pg_advisory_xact_lock(:key)"),
-            {"key": _OWNER_TRANSFER_LOCK_KEY},
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
+            {"scope": advisory_scope(cfg.db_schema, _OWNER_TRANSFER_LOCK_NAME)},
         )
         current_owner = await sess.scalar(
             select(role_assignments.c.user_id).where(

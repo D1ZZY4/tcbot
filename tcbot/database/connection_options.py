@@ -29,6 +29,18 @@ def normalize_database_url(url: str) -> str:
     return url
 
 
+def advisory_scope(schema: str, name: str) -> str:
+    """Return an advisory-lock scope isolated to one deployment schema.
+
+    PostgreSQL advisory locks are database-wide and ignore ``search_path``.
+    Without the schema in the key, two deployments that share a database but
+    use different project schemas contend for the same locks: one schema's
+    sweep can skip while the other holds it, and moderation writes for the
+    same user serialize across deployments.
+    """
+    return f"{schema}:{name}"
+
+
 def schema_options(schema: str, *, primary_chat_id: int = 0) -> str:
     """Return the libpq options that scope a connection to *schema*.
 

@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from tcbot import cfg
 from tcbot.database import moderation_db
 from tcbot.database.base import moderation_actions
+from tcbot.database.connection_options import advisory_scope
 from tcbot.database.documents import WarnDoc
 from tcbot.database.engine import (
     db_call,
@@ -68,14 +69,20 @@ async def _lock_warn_mutation(
     """
     await sess.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
-        {"scope": _WARN_USER_LOCK.format(user_id=user_id)},
+        {
+            "scope": advisory_scope(
+                cfg.db_schema, _WARN_USER_LOCK.format(user_id=user_id)
+            )
+        },
     )
     if chat_id is None:
         return
     await sess.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
         {
-            "scope": _WARN_CHAT_LOCK.format(chat_id=chat_id, user_id=user_id),
+            "scope": advisory_scope(
+                cfg.db_schema, _WARN_CHAT_LOCK.format(chat_id=chat_id, user_id=user_id)
+            ),
         },
     )
 

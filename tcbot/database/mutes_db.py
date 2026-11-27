@@ -16,8 +16,10 @@ from typing import TYPE_CHECKING, Any, cast
 from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from tcbot import cfg
 from tcbot.database import enforcement_ledger, moderation_db
 from tcbot.database.base import moderation_actions
+from tcbot.database.connection_options import advisory_scope
 from tcbot.database.documents import ActiveMuteDoc, MuteDoc
 from tcbot.database.engine import (
     constraint_name,
@@ -108,7 +110,7 @@ async def record_mute(
         # * is not the unique-constraint retry the caller knows.
         await sess.execute(
             text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
-            {"scope": f"mute:{user_id}"},
+            {"scope": advisory_scope(cfg.db_schema, f"mute:{user_id}")},
         )
         # * Read the clock after the lock and hold the active row: an
         # * unmute may have revoked it while this writer waited, and the

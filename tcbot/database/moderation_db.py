@@ -18,12 +18,10 @@ from typing import TYPE_CHECKING, cast
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from tcbot.database.base import (
-    moderation_case_rules,
-    moderation_cases,
-    moderation_evidence_items,
-)
+from tcbot import cfg
+from tcbot.database.base import moderation_cases, moderation_evidence_items
 from tcbot.database.base import moderation_evidence_uploads as evidence_uploads
+from tcbot.database.connection_options import advisory_scope
 from tcbot.database.users_cache import ensure_users
 from tcbot.utils.time_and_date import utc_now
 
@@ -106,7 +104,7 @@ async def open_case(
     # * same time, and the select-then-insert would otherwise open two cases.
     await sess.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
-        {"scope": f"case:{subject_user_id}"},
+        {"scope": advisory_scope(cfg.db_schema, f"case:{subject_user_id}")},
     )
     stmt = select(moderation_cases.c.id).where(
         moderation_cases.c.subject_user_id == subject_user_id,

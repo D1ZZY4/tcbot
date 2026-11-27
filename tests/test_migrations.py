@@ -87,7 +87,9 @@ def test_the_migration_reaches_the_database_with_a_percent_url(
     # * The lock connection is out of scope here: this test pins the URL
     # * handed to Alembic, not the advisory-lock plumbing.
     monkeypatch.setattr(
-        migrations, "_migration_lock", lambda _url: contextlib.nullcontext()
+        migrations,
+        "_migration_lock",
+        lambda _url, _schema: contextlib.nullcontext(),
     )
 
     migrations.upgrade_head(_PERCENT_URL)
@@ -111,13 +113,18 @@ def test_the_schema_travels_to_the_migration_config(
         captured.append(config.get_main_option("db_schema", ""))
 
     monkeypatch.setattr(migrations.command, "upgrade", _upgrade)
-    monkeypatch.setattr(
-        migrations, "_migration_lock", lambda _url: contextlib.nullcontext()
-    )
+    lock_schemas: list[str] = []
+
+    def _lock(_url: str, schema: str) -> contextlib.AbstractContextManager[None]:
+        lock_schemas.append(schema)
+        return contextlib.nullcontext()
+
+    monkeypatch.setattr(migrations, "_migration_lock", _lock)
 
     migrations.upgrade_head(_PERCENT_URL, "development")
 
     assert captured == ["development"]
+    assert lock_schemas == ["development"]
 
 
 def test_every_revision_id_fits_the_version_column() -> None:
