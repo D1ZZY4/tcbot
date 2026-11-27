@@ -284,14 +284,6 @@ def is_known_locale(
     return _canonical_locale(locale, data) is not None
 
 
-def canonical_locale(
-    locale: str | None, catalog: dict[str, dict[str, str]] | None = None
-) -> str | None:
-    """Return the catalog spelling of *locale*, or None when it is unknown."""
-    data = catalog if catalog is not None else _ensure_loaded()
-    return _canonical_locale(locale, data)
-
-
 def display_name(locale: str, catalog: dict[str, dict[str, str]] | None = None) -> str:
     """Return the human-readable name of ``locale`` for buttons and confirmations."""
     data = catalog if catalog is not None else _ensure_loaded()

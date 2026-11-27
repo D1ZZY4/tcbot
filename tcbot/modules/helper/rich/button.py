@@ -182,11 +182,6 @@ def button(
     return f"<tg-button{attrs}>{esc(label)}</tg-button>"
 
 
-def callback_button(label: str, data: str, *, style: str | None = None) -> str:
-    """Render a callback button."""
-    return button(label, data=data, style=style)
-
-
 def url_button(label: str, url: str, *, style: str | None = None) -> str:
     """Render a URL button."""
     return button(label, url=url, style=style)
@@ -501,7 +496,6 @@ __all__ = [
     "button_row",
     "button_rows",
     "buttons_from_markup",
-    "callback_button",
     "copy_button",
     "disabled_button",
     "is_mentionable_user_id",

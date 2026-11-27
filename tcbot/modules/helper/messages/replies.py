@@ -209,11 +209,6 @@ def refuse_outranked(role: str, locale: str | None = None, *, plain: bool) -> st
     return t("common.refuse.outranked", locale, role=role, plain=plain)
 
 
-def refuse_permission(locale: str | None = None, *, plain: bool) -> str:
-    """Missing-permission refusal in the render locale."""
-    return t("common.refuse.permission", locale, plain=plain)
-
-
 # ─────────────────────── Action Defaults ────────────────────────── #
 
 

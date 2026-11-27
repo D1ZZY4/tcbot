@@ -39,7 +39,6 @@ rank_insufficient = "Kamu tidak punya pangkat untuk yang ini."
 role_lookup = "Tidak bisa memverifikasi peran federasi sekarang. Coba lagi sebentar."
 anon_admin = "Mode admin anonim tidak didukung untuk perintah federasi. Kirim perintah ini dari akun pribadimu."
 outranked = "Itu seorang {role} - pangkatnya di atasmu di sini, tidak bisa bertindak terhadap mereka."
-permission = "Kamu tidak punya izin yang diperlukan untuk perintah ini."
 
 [limit]
 # Placeholders: {wait} = seconds as an integer, at least 1. The unit

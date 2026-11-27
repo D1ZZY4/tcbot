@@ -64,9 +64,6 @@ class KeyedUpdateProcessor:
         # * The global cap bounds the handlers that actually run.
         self._global = asyncio.Semaphore(max_concurrent_updates)
 
-    async def initialize(self) -> None:
-        """Prepare the processor; nothing to allocate up front."""
-
     async def shutdown(self) -> None:
         """Release the per-key locks; nothing to clean up."""
         self._locks.clear()

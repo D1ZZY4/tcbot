@@ -38,7 +38,6 @@ rank_insufficient = "You don't have the rank for this one."
 role_lookup = "I couldn't verify federation roles right now. Please try again in a moment."
 anon_admin = "Anonymous admin mode is not supported for federation commands. Please send this command from your personal account."
 outranked = "That's a {role} - they outrank you here, can't take action on them."
-permission = "You don't have the permission needed for this command."
 
 [limit]
 # Placeholders: {wait} = seconds as an integer, at least 1. The unit
