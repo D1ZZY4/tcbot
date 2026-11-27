@@ -30,7 +30,12 @@ from tcbot.modules.helper.messages import (
 from tcbot.modules.helper.pipelines import moderation_enforcement
 from tcbot.modules.helper.pipelines.errors.exceptions import API_REFUSAL_ERRORS
 from tcbot.modules.helper.rich.block import blocks
-from tcbot.utils.dispatch import fan_out, gather_bounded, throw_if_cancelled
+from tcbot.utils.dispatch import (
+    fan_out,
+    gather_bounded,
+    is_circuit_skip,
+    throw_if_cancelled,
+)
 from tcbot.utils.i18n import Safe, bold, code, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
@@ -347,6 +352,28 @@ async def cmd_cleanup(ctx: Ctx) -> None:
     checks = await fan_out([_should_remove(ctx.bot, g) for g in groups])
 
     to_remove = [g for g, remove in zip(groups, checks, strict=True) if remove is True]
+    # * A failed or skipped probe is not a verified "keep": it must be named in
+    # * the staff summary instead of looking like a clean sweep.
+    unverified = [
+        (grp, result)
+        for grp, result in zip(groups, checks, strict=True)
+        if isinstance(result, BaseException)
+    ]
+    for grp, result in unverified:
+        log.warning(
+            "cleanup probe failed for chat=%s: %s",
+            grp.get("chat_id", 0),
+            result,
+        )
+    detail = ""
+    if unverified:
+        skipped = sum(1 for _grp, result in unverified if is_circuit_skip(result))
+        detail = t(
+            "maintenance.cleanup.unverified",
+            locale,
+            n=Safe(code(str(len(unverified) - skipped))),
+            skipped=Safe(code(str(skipped))),
+        )
 
     if to_remove:
         # * Pure database writes: bounded gather, not fan_out. fan_out wraps
@@ -376,6 +403,7 @@ async def cmd_cleanup(ctx: Ctx) -> None:
             "maintenance.cleanup.done",
             locale,
             n=Safe(code(str(deactivated))),
+            detail=Safe(detail),
         ),
         log_label="cleanup",
     )

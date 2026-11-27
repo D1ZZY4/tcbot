@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from types import SimpleNamespace as _NS
 
 import pytest
+from pyrogram import ContinuePropagation
 from pyrogram.enums import ChatMemberStatus
 
 from tcbot.modules import connect as connect_module
@@ -141,6 +142,24 @@ async def test_bot_added_to_infrastructure_group_sends_no_connect_prompt(
     )
 
     assert bot.sent == []
+
+
+@pytest.mark.asyncio
+async def test_a_human_member_update_is_passed_to_the_next_handler() -> None:
+    """The bot-added handler must not consume join-request approval updates."""
+    update = _forum_update(None)
+    update.my_chat_member.new_chat_member.user = SimpleNamespace(id=4242)
+
+    async def _identity() -> SimpleNamespace:
+        return SimpleNamespace(id=777000)
+
+    ctx = _NS(
+        bot=_FakeBot(),
+        bot_identity=_identity,
+        chat_member=update.my_chat_member,
+    )
+    with pytest.raises(ContinuePropagation):
+        await connect_added.connection.on_bot_added(ctx)  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio

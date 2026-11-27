@@ -52,7 +52,10 @@ log_failed = " ({n} log posts failed)"
 done = "Left {ok} groups. Failed: {failed}.{detail}"
 
 [cleanup]
-done = "Cleaned up {n} inaccessible group(s)."
+done = "Cleaned up {n} inaccessible group(s).{detail}"
+# Translator note: {n} is the deactivated count; {detail} is empty or the
+# unverified/skipped notice below. Placeholders are pre-formatted code.
+unverified = " {n} group(s) failed checking and were kept; {skipped} more were skipped while Telegram was unavailable."
 
 [forget]
 usage = "Usage: /tcforget <user_id> <reason>"

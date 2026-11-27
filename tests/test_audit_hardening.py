@@ -146,6 +146,34 @@ def test_refresh_display_name_respects_concurrent_invalidation(
     assert put_calls == []
 
 
+def test_display_name_refresh_does_not_rewarm_stale_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A partial name write must cache the stored identity, not a stale peek."""
+    put_calls: list[tuple[int, list[str | None]]] = []
+
+    async def _peek(_self: object, _uid: int) -> list[str | None]:
+        return ["Old", "olduser", "OldLast"]
+
+    async def _upsert(uid: int, username: object, first_name: str) -> bool:
+        user_mention_cache.invalidate(uid)
+        return True
+
+    async def _stored(uid: int) -> list[str | None]:
+        return ["Fresh", "currentuser", "CurrentLast"]
+
+    def _put(_self: object, key: int, value: list[str | None]) -> None:
+        put_calls.append((key, value))
+
+    monkeypatch.setattr(type(user_mention_cache), "peek", _peek)
+    monkeypatch.setattr(type(user_mention_cache), "put", _put)
+    monkeypatch.setattr(users_cache, "upsert_user", _upsert)
+    monkeypatch.setattr(users_cache, "_fetch_mention_triple", _stored)
+
+    assert asyncio.run(users_cache.refresh_display_name(7, "Fresh")) is True
+    assert put_calls == [(7, ["Fresh", "currentuser", "CurrentLast"])]
+
+
 def test_unmute_refusal_skips_the_revoke(monkeypatch: pytest.MonkeyPatch) -> None:
     """A refused execution-time gate must not revoke the stored mute."""
     called: list[str] = []

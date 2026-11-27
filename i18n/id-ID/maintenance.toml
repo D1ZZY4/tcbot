@@ -52,7 +52,10 @@ log_failed = " ({n} pengiriman log gagal)"
 done = "Keluar dari {ok} grup. Gagal: {failed}.{detail}"
 
 [cleanup]
-done = "Membersihkan {n} grup yang tidak bisa diakses."
+done = "Membersihkan {n} grup yang tidak bisa diakses.{detail}"
+# Catatan penerjemah: {n} adalah jumlah yang dinonaktifkan; {detail} kosong
+# atau notifikasi pemeriksaan gagal di bawah. Placeholder sudah berformat kode.
+unverified = " {n} grup gagal diperiksa dan tetap dipertahankan; {skipped} lagi dilewati saat Telegram tidak tersedia."
 
 [forget]
 usage = "Gunakan: /tcforget <user_id> <alasan>"

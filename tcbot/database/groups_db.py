@@ -31,6 +31,7 @@ from tcbot.database.engine import (
     fetch_one,
     fetch_value,
     run,
+    run_returning,
     run_transaction,
 )
 from tcbot.database.types import ChatId, GroupId, UserId
@@ -525,8 +526,11 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
     Returns ``True`` when the group was connected and has been moved.
     Cancellation propagates.
     """
-    summary = await db_call(
-        lambda: fetch_one(
+    # * repoint_chat_records writes across six tables. Route it through the
+    # * transactional boundary: the autocommit read connection may one day
+    # * become read-only, and a half-moved group is worse than no move.
+    rows = await db_call(
+        lambda: run_returning(
             text(
                 "SELECT (repoint_chat_records(:old_chat_id, :new_chat_id)"
                 " ->> 'was_active')::boolean AS was_active"
@@ -536,8 +540,9 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
             )
         )
     )
-    if summary is None:
+    if not rows:
         return False
+    summary = rows[0]
     moved = bool(summary.get("was_active"))
     connected_cache.put(old_chat_id, False)  # noqa: FBT003
     # * The cached value mirrors the row, not the move. The move may have
