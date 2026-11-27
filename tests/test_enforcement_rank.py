@@ -146,6 +146,16 @@ async def test_the_verdict_fails_closed_on_a_lookup_error(
     assert label is None
 
 
+def test_an_outrank_notice_escapes_a_legacy_role_label() -> None:
+    """Plain-mode notices still enter rich HTML, so labels must be escaped."""
+    text = guards.enforcement_refusal_text(
+        EnforcementVerdict.OUTRANKED, "<Admin & Owner>", "en-US"
+    )
+
+    assert "&lt;Admin &amp; Owner&gt;" in text
+    assert "<Admin" not in text
+
+
 # ───────────────────────── The identity classification ─────────────────── #
 
 

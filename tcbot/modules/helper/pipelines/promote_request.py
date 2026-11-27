@@ -30,10 +30,16 @@ async def assign_admin(
     target_id: int,
     target_fname: str,
     locale: str | None = None,
+    current_role: str | None = None,
 ) -> tuple[bool, str]:
     """Owner-only path: directly give the target the admin role and log it."""
     try:
-        await db.users_roles.add_admin(target_id, admin_id)
+        await db.users_roles.add_admin(
+            target_id,
+            admin_id,
+            expected_role=current_role,
+            expect_no_role=current_role is None,
+        )
     except Exception:
         log.exception("assign_admin failed for target=%d", target_id)
         return False, t("admins.promote.save_fail", locale)
@@ -90,7 +96,13 @@ async def assign_subrole(
             "admins.promote.already_admin", locale, role=db.users_roles.role_label(role)
         )
     try:
-        await db.users_roles.set_role(target_id, role, admin_id)
+        await db.users_roles.set_role(
+            target_id,
+            role,
+            admin_id,
+            expected_role=current_role,
+            expect_no_role=current_role is None,
+        )
     except Exception:
         log.exception("assign_subrole failed for target=%d role=%s", target_id, role)
         return False, t("admins.promote.role_fail", locale)

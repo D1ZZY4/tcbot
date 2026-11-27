@@ -25,9 +25,9 @@ import pytest
 from tcbot import database as db
 from tcbot.modules import kick as kicking
 from tcbot.modules.helper import targets
-from tcbot.modules.helper.handlers import ConversationHandler
 from tcbot.modules.helper.pipelines import demote_actions as demote
 from tcbot.modules.helper.pipelines import kick_executor
+from tcbot.modules.helper.pipelines.mod_action_steps import WAITING_PROOF
 from tcbot.modules.helper.targets import ModTarget
 
 
@@ -54,7 +54,7 @@ class _FakeMsg:
 
     async def reply_text(self, text: str, **kwargs: Any) -> Any:
         self.replies.append(text)
-        return type("Sent", (), {"message_id": 42})()
+        return type("Sent", (), {"message_id": 42, "id": 42})()
 
 
 class _FakeUpdate:
@@ -100,7 +100,9 @@ def test_the_kick_entry_does_not_demote(
         return _resolved_target(args[0].effective_message)
 
     async def _role(uid: int, *, fresh: bool = False) -> str:
-        return "tester"
+        # * The executor must pass basic_mod_only or the decorator refuses
+        # * before the handler body, and the test would pass vacuously.
+        return "moderator"
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(targets, "resolve_mod_target", _resolve)
@@ -110,9 +112,10 @@ def test_the_kick_entry_does_not_demote(
     ctx = _FakeCtx()
     outcome = asyncio.run(kicking.cmd_kick(_FakeUpdate(msg), ctx))  # type: ignore[arg-type]
 
-    # * The handler ran: the proof prompt was sent.
+    # * The handler ran: the proof prompt was sent and the flow state is live.
     assert msg.replies
-    assert outcome != ConversationHandler.END
+    assert outcome == WAITING_PROOF
+    assert ctx.user_data["kick_target_id"] == 999
     assert demoted == []
 
 

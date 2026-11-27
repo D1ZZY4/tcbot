@@ -20,7 +20,7 @@ from tcbot.modules.helper.context import Ctx
 from tcbot.modules.helper.locale import effective_locale, locale_for_update
 from tcbot.modules.helper.messages import answer_ack, cb_error_edit, replies, reply_rich
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.i18n import t
+from tcbot.utils.i18n import esc, t
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -165,7 +165,9 @@ def enforcement_refusal_text(
     notice.
     """
     if verdict is EnforcementVerdict.OUTRANKED:
-        return replies.refuse_outranked(target_label or "", locale, plain=True)
+        # * Plain mode leaves placeholders unescaped, yet the notice still
+        # * enters rich HTML. A legacy stored role can contain markup.
+        return replies.refuse_outranked(esc(target_label or ""), locale, plain=True)
     if verdict is EnforcementVerdict.RANK_INSUFFICIENT:
         return replies.refuse_rank_insufficient(locale, plain=True)
     return replies.refuse_role_lookup(locale, plain=True)
@@ -288,7 +290,7 @@ async def resolve_and_check(
         return None, None
 
     if not outranks(executor_role, target_role):
-        label = db.users_roles.role_label(target_role)
+        label = esc(db.users_roles.role_label(target_role))
         await reply_rich(
             msg,
             replies.refuse_outranked(label, locale, plain=True),
@@ -594,12 +596,15 @@ async def prompt_owner_mismatch(q: Any, ctx: Ctx, *, min_parts: int, key: str) -
     except ValueError:
         # * Fail closed: a payload whose owner segment is not a user id
         # * cannot prove who opened the prompt, so the tapper is not
-        # * treated as the owner.
+        # * treated as the owner. The tap still needs an answer or the
+        # * client spinner keeps running after the caller returns.
+        await answer_ack(q)
         return True
     tapper = ctx.effective_user
     # ! CRITICAL: no proven identity cannot be the prompt owner. Treating a
     # * missing tapper as the owner would let an unattributed tap through.
     if tapper is None:
+        await answer_ack(q)
         return True
     if tapper.id == owner_id:
         return False

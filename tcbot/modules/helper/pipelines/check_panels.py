@@ -147,19 +147,37 @@ class CheckProfileMixin:
         counts_failed = any(isinstance(r, BaseException) for r in _results[4:10])
         active_ban = _results[2] if not ban_failed else None
         active_mute = _results[3] if not mute_failed else None
-        ban_total = _results[4] if not isinstance(_results[4], BaseException) else 0
-        appeal_total = _results[5] if not isinstance(_results[5], BaseException) else 0
-        warn_total = _results[6] if not isinstance(_results[6], BaseException) else 0
+
+        def count_or_unknown(index: int) -> int | Safe:
+            """Render a failed counter as an explicit unknown, never as zero."""
+            value = _results[index]
+            if isinstance(value, BaseException):
+                return Safe(t("checking.profile.unknown", locale))
+            return int(value)
+
+        ban_total = count_or_unknown(4)
+        appeal_total = count_or_unknown(5)
+        warn_total = count_or_unknown(6)
         _wg = _results[7] if not isinstance(_results[7], BaseException) else None
         warn_groups: list[tuple[int, int]] = (
             cast("list[tuple[int, int]]", _wg) if _wg is not None else []
         )
+        warn_groups_failed = _wg is None and isinstance(_results[7], BaseException)
         # * The federation total is the sum of the per-group counts that the
         # * warn-group read already returned, so a second query would read
-        # * the same rows again.
-        fed_warn_total = sum(count for _, count in warn_groups)
-        kick_total = _results[8] if not isinstance(_results[8], BaseException) else 0
-        mute_total = _results[9] if not isinstance(_results[9], BaseException) else 0
+        # * the same rows again. An unreadable group list is not "no groups".
+        fed_warn_total: int | Safe = (
+            Safe(t("checking.profile.unknown", locale))
+            if warn_groups_failed
+            else sum(count for _, count in warn_groups)
+        )
+        warn_group_count: int | Safe = (
+            Safe(t("checking.profile.unknown", locale))
+            if warn_groups_failed
+            else len(warn_groups)
+        )
+        kick_total = count_or_unknown(8)
+        mute_total = count_or_unknown(9)
         if isinstance(r_user_info, BaseException):
             log.error("_resolve_user_info failed for %d: %s", target_id, r_user_info)
             fname, uname = str(target_id), None
@@ -250,7 +268,7 @@ class CheckProfileMixin:
                         "checking.profile.table.warnings_detail",
                         locale,
                         active=fed_warn_total,
-                        groups=len(warn_groups) if warn_groups is not None else 0,
+                        groups=warn_group_count,
                         total=warn_total,
                     )
                 ),

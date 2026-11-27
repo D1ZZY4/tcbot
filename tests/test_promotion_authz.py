@@ -105,7 +105,13 @@ def test_promote_execute_refuses_a_banned_target(
 
     granted: list[int] = []
 
-    async def _add_admin(user_id: int, promoted_by: int) -> None:
+    async def _add_admin(
+        user_id: int,
+        promoted_by: int,
+        *,
+        expected_role: str | None = None,
+        expect_no_role: bool = False,
+    ) -> None:
         granted.append(user_id)
 
     monkeypatch.setattr(db.users_roles, "add_admin", _add_admin)
@@ -139,7 +145,13 @@ def test_promote_execute_rechecks_the_executor_rank(
     _install_executor_role(monkeypatch, "moderator")
     granted: list[int] = []
 
-    async def _add_admin(user_id: int, promoted_by: int) -> None:
+    async def _add_admin(
+        user_id: int,
+        promoted_by: int,
+        *,
+        expected_role: str | None = None,
+        expect_no_role: bool = False,
+    ) -> None:
         granted.append(user_id)
 
     monkeypatch.setattr(db.users_roles, "add_admin", _add_admin)
@@ -172,7 +184,13 @@ def test_promote_execute_fails_closed_on_a_role_lookup_error(
     monkeypatch.setattr(db.users_roles, "get_effective_role", _boom)
     granted: list[int] = []
 
-    async def _add_admin(user_id: int, promoted_by: int) -> None:
+    async def _add_admin(
+        user_id: int,
+        promoted_by: int,
+        *,
+        expected_role: str | None = None,
+        expect_no_role: bool = False,
+    ) -> None:
         granted.append(user_id)
 
     monkeypatch.setattr(db.users_roles, "add_admin", _add_admin)
@@ -194,7 +212,14 @@ def test_promote_execute_allows_a_clean_target(
     _install_executor_role(monkeypatch, "owner")
     assigned: list[tuple[int, str]] = []
 
-    async def _set_role(user_id: int, role: str, assigned_by: int) -> None:
+    async def _set_role(
+        user_id: int,
+        role: str,
+        assigned_by: int,
+        *,
+        expected_role: str | None = None,
+        expect_no_role: bool = False,
+    ) -> None:
         _ = assigned_by
         assigned.append((user_id, role))
 
@@ -234,7 +259,14 @@ def test_promote_execute_rechecks_the_target_rank(
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     assigned: list[tuple[int, str]] = []
 
-    async def _set_role(user_id: int, role: str, assigned_by: int) -> None:
+    async def _set_role(
+        user_id: int,
+        role: str,
+        assigned_by: int,
+        *,
+        expected_role: str | None = None,
+        expect_no_role: bool = False,
+    ) -> None:
         _ = assigned_by
         assigned.append((user_id, role))
 

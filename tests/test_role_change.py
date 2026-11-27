@@ -47,7 +47,9 @@ def _wire(
     async def _role(user_id: int, *, fresh: bool = False) -> str | None:
         return executor if user_id == 1 else target
 
-    async def _change(user_id: int, role: str, assigned_by: int) -> None:
+    async def _change(
+        user_id: int, role: str, assigned_by: int, *, expected_role: str | None = None
+    ) -> None:
         calls.append((user_id, role, assigned_by))
 
     async def _locale(_uid: int) -> str:

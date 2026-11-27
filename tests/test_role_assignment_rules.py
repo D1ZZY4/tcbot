@@ -46,10 +46,23 @@ def _install_promote(
     """Install the collaborators of the promotion path."""
     seen: dict[str, Any] = {"added": [], "roles": [], "enqueued": []}
 
-    async def _add_admin(user_id: int, promoted_by: int) -> None:
+    async def _add_admin(
+        user_id: int,
+        promoted_by: int,
+        *,
+        expected_role: str | None = None,
+        expect_no_role: bool = False,
+    ) -> None:
         seen["added"].append((user_id, promoted_by))
 
-    async def _set_role(user_id: int, role: str, assigned_by: int) -> None:
+    async def _set_role(
+        user_id: int,
+        role: str,
+        assigned_by: int,
+        *,
+        expected_role: str | None = None,
+        expect_no_role: bool = False,
+    ) -> None:
         _ = assigned_by
         seen["roles"].append((user_id, role))
 

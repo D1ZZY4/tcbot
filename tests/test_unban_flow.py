@@ -16,6 +16,7 @@ from tcbot import database as db
 from tcbot.modules import unban
 from tcbot.modules.helper.identity import Identity
 from tcbot.modules.helper.pipelines import unban_executor
+from tcbot.modules.helper.rich.button import ANONYMOUS_BOT_ID
 from tcbot.utils.i18n import Safe, t, user_ref
 
 
@@ -324,13 +325,29 @@ def test_a_settled_run_with_a_missing_group_is_reported_as_queued(
     assert "queued" in msg.replies[-1]
 
 
-def test_anonymous_admin_log_names_anonymous(
+def test_anonymous_admin_cannot_reach_the_unban_write(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """An anonymous admin has no accountable executor for the rank gate."""
     _install(monkeypatch, groups=[])
     msg, bot = _FakeMsg(), _FakeBot()
     asyncio.run(unban_executor.execute_unban(_update(msg, None), _ctx(bot), 42, "T"))
-    assert bot.logs and "anonymous admin" in bot.logs[-1]
+    assert bot.logs == []
+    assert msg.replies and "personal account" in msg.replies[-1]
+
+
+def test_the_anonymous_admin_placeholder_cannot_reach_the_unban_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A placeholder sender has no accountable executor either."""
+    _install(monkeypatch, groups=[])
+    msg, bot = _FakeMsg(), _FakeBot()
+    placeholder = SimpleNamespace(id=ANONYMOUS_BOT_ID)
+    asyncio.run(
+        unban_executor.execute_unban(_update(msg, placeholder), _ctx(bot), 42, "T")
+    )
+    assert bot.logs == []
+    assert msg.replies and "personal account" in msg.replies[-1]
 
 
 def test_staff_cleanup_uses_whichever_read_saw_the_role() -> None:

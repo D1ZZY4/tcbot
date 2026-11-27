@@ -7,10 +7,11 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.engine import CursorResult
 
 from tcbot.database.base import (
     permission_definitions,
@@ -504,9 +505,21 @@ async def is_admin(user_id: int) -> bool:
     return row is not None
 
 
-async def add_admin(user_id: int, promoted_by: int) -> None:
+async def add_admin(
+    user_id: int,
+    promoted_by: int,
+    *,
+    expected_role: str | None = None,
+    expect_no_role: bool = False,
+) -> None:
     """Give the admin role to a user; no-op if the role is already held."""
-    await _assign_role(user_id, _ADMIN_ROLE, promoted_by)
+    await _assign_role(
+        user_id,
+        _ADMIN_ROLE,
+        promoted_by,
+        expected_role=expected_role,
+        expect_no_role=expect_no_role,
+    )
     effective_role_cache.invalidate(user_id)
 
 
@@ -540,18 +553,38 @@ async def admin_count() -> int:
 # ────────────────────────── Role CRUD ─────────────────────────── #
 
 
-async def set_role(user_id: int, role: str, assigned_by: int) -> None:
+async def set_role(
+    user_id: int,
+    role: str,
+    assigned_by: int,
+    *,
+    expected_role: str | None = None,
+    expect_no_role: bool = False,
+) -> None:
     """Assign a community role (developer/moderator) to a user."""
     # ! CRITICAL: reject anything outside VALID_ROLES. get_effective_role
     # ! returns the stored value verbatim, so a stored "admin" or "owner"
     # ! would grant real privilege to a role row.
     if role not in VALID_ROLES:
         raise ValueError(f"Refusing to store invalid custom role: {role!r}")
-    await _assign_role(user_id, role, assigned_by)
+    await _assign_role(
+        user_id,
+        role,
+        assigned_by,
+        expected_role=expected_role,
+        expect_no_role=expect_no_role,
+    )
     effective_role_cache.invalidate(user_id)
 
 
-async def change_role(user_id: int, role: str, assigned_by: int) -> None:
+async def change_role(
+    user_id: int,
+    role: str,
+    assigned_by: int,
+    *,
+    expected_role: str | None = None,
+    expect_no_role: bool = False,
+) -> None:
     """Replace a staff member's role with another assignable tier.
 
     ``set_role`` is deliberately limited to Developer/Moderator. This helper
@@ -562,7 +595,13 @@ async def change_role(user_id: int, role: str, assigned_by: int) -> None:
     """
     if role not in ("admin", "developer", "moderator"):
         raise ValueError(f"Refusing to change to role: {role!r}")
-    await _assign_role(user_id, role, assigned_by)
+    await _assign_role(
+        user_id,
+        role,
+        assigned_by,
+        expected_role=expected_role,
+        expect_no_role=expect_no_role,
+    )
     effective_role_cache.invalidate(user_id)
 
 
@@ -608,7 +647,14 @@ async def role_count(role: str) -> int:
     )
 
 
-async def _assign_role(user_id: int, role: str, assigned_by: int) -> None:
+async def _assign_role(
+    user_id: int,
+    role: str,
+    assigned_by: int,
+    *,
+    expected_role: str | None = None,
+    expect_no_role: bool = False,
+) -> None:
     """Give one role to one user and revoke the role it replaces.
 
     The revocation and the assignment land in one transaction, so a user
@@ -624,17 +670,34 @@ async def _assign_role(user_id: int, role: str, assigned_by: int) -> None:
         # ! set_owner replaces the Owner; a grant that targeted the owner
         # ! must fail the active-user uniqueness rule instead of leaving the
         # ! community without an owner.
-        await sess.execute(
-            role_assignments.update()
-            .where(
-                role_assignments.c.user_id == user_id,
-                role_assignments.c.status == "active",
-                role_assignments.c.role_key != _OWNER_ROLE,
+        if not expect_no_role:
+            revoke = (
+                role_assignments.update()
+                .where(
+                    role_assignments.c.user_id == user_id,
+                    role_assignments.c.status == "active",
+                    role_assignments.c.role_key != _OWNER_ROLE,
+                )
+                .values(
+                    status="revoked",
+                    revoked_at=utc_now(),
+                    revoked_by_user_id=assigned_by,
+                )
             )
-            .values(
-                status="revoked", revoked_at=utc_now(), revoked_by_user_id=assigned_by
-            )
-        )
+            if expected_role is not None:
+                # ! CRITICAL: only revoke the tier that was authorized. A
+                # ! target promoted while the ban or rank read was in flight
+                # ! must keep the new role instead of being demoted by a
+                # ! stale grant decision.
+                revoke = revoke.where(role_assignments.c.role_key == expected_role)
+            result = cast("CursorResult[Any]", await sess.execute(revoke))
+            if expected_role is not None and result.rowcount != 1:
+                raise ValueError(
+                    f"expected role {expected_role!r} changed before the grant"
+                )
+        # * With expect_no_role there is nothing to revoke. The partial unique
+        # * index on active assignments rejects a concurrent grant instead of
+        # * letting this decision strip a role that appeared after the read.
         await sess.execute(
             pg_insert(role_assignments).values(
                 user_id=user_id,

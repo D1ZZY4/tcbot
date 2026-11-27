@@ -11,7 +11,7 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from tcbot.modules.helper.buttons.common import back_button, back_row
 from tcbot.modules.helper.messages import appeal_deep_link
-from tcbot.utils.i18n import t
+from tcbot.utils.i18n import Safe, t
 
 # * Warn button titles embed the group name; cap it so a long title cannot
 # * blow up the button layout.
@@ -80,11 +80,11 @@ def check_warn_groups_btn(
 def check_profile_btn(
     target_id: int,
     *,
-    ban_total: int,
-    appeal_total: int,
-    fed_warn_total: int,
-    kick_total: int,
-    mute_total: int,
+    ban_total: int | Safe,
+    appeal_total: int | Safe,
+    fed_warn_total: int | Safe,
+    kick_total: int | Safe,
+    mute_total: int | Safe,
     locale: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Check-profile dashboard: Bans/Appeals, Warnings, Kicks/Mutes."""

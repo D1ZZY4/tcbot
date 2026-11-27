@@ -263,6 +263,34 @@ class ApproveMixin:
             for grp in groups
             if int(grp.get("chat_id", 0) or 0)
         ]
+        # ! CRITICAL: the group read is an await after the role read above.
+        # ! A target promoted in that window must be checked against the
+        # ! approver again, or the demote below is skipped while the ban lift
+        # ! leaves the newly granted staff rank in place.
+        try:
+            live_target_role = await db.users_roles.get_effective_role(
+                target_id, fresh=True
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("approve_appeal live role lookup failed for %d", target_id)
+            await _answer_review(q, locale, "appeals.review.db_retry")
+            return False
+        if not guards.outranks(approver_role, live_target_role):
+            log.warning(
+                "approve_appeal refused: approver %d no longer outranks target %d",
+                admin.id,
+                target_id,
+            )
+            await _answer_review(
+                q,
+                locale,
+                "common.refuse.outranked",
+                role=db.users_roles.role_label(live_target_role),
+            )
+            return False
+        target_role = live_target_role
         # ! CRITICAL: re-read the reviewer's rank before any irreversible
         # ! write. The demote below strips the target's role and cannot be
         # ! undone here, so a reviewer demoted during the claim or the group
@@ -711,22 +739,25 @@ class AppealReviewMixin(AppealVerdictsMixin):
                     parse_mode=None,
                 )
             else:
-                try:
-                    await q.answer(
-                        t("appeals.review.already_resolved", locale, plain=True),
-                        show_alert=True,
-                    )
-                except Exception as exc:
-                    log.debug("Appeal already-resolved answer failed: %s", exc)
+                # * A decided card must lose its buttons even when its id is
+                # * no longer on the ban record; an alert alone leaves a
+                # * live-looking Approve/Reject keyboard on the message.
+                await answer_ack(q)
+                await cb_error_edit(
+                    q,
+                    t("appeals.review.already_resolved", locale, plain=True),
+                    log_label="Appeal already-resolved",
+                    parse_mode=None,
+                )
             return
         if ban.get("rejected_at") is not None or not ban.get("review_message_id"):
-            try:
-                await q.answer(
-                    t("appeals.review.already_resolved", locale, plain=True),
-                    show_alert=True,
-                )
-            except Exception as exc:
-                log.debug("Appeal already-resolved answer failed: %s", exc)
+            await answer_ack(q)
+            await cb_error_edit(
+                q,
+                t("appeals.review.already_resolved", locale, plain=True),
+                log_label="Appeal already-resolved",
+                parse_mode=None,
+            )
             return
         expected_review_id = int(ban.get("review_message_id") or 0)
         if tapped_review_id != expected_review_id:

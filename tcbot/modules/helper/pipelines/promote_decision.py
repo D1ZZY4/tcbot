@@ -196,7 +196,12 @@ async def execute_promo_decision(ctx: Ctx) -> None:
             )
             return
         try:
-            await db.users_roles.add_admin(target_id, admin.id)
+            await db.users_roles.add_admin(
+                target_id,
+                admin.id,
+                expected_role=target_role,
+                expect_no_role=target_role is None,
+            )
         except Exception:
             log.exception(
                 "add_admin failed for %d (request %s, already resolved)",

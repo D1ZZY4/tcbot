@@ -92,6 +92,50 @@ def test_ban_detail_genuine_miss_same_render(monkeypatch: pytest.MonkeyPatch) ->
     assert text == _expected_not_found("abc")
 
 
+def test_a_failed_counter_is_not_rendered_as_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A counter outage shows an explicit unknown, not a clean zero total."""
+
+    async def _info(_bot: object, _uid: int) -> tuple[str, None]:
+        return "Alice", None
+
+    async def _meta(_uid: int) -> tuple[None, None, None]:
+        return None, None, None
+
+    async def _none(*_args: object) -> None:
+        return None
+
+    async def _three(_uid: int) -> int:
+        return 3
+
+    async def _boom(_uid: int) -> object:
+        raise RuntimeError("db blip")
+
+    async def _groups(_uid: int) -> list[tuple[int, int]]:
+        return [(111, 2)]
+
+    async def _zero(_uid: int) -> int:
+        return 0
+
+    monkeypatch.setattr(check_panels, "_resolve_user_info", _info)
+    monkeypatch.setattr(db.users_roles, "role_meta", _meta)
+    monkeypatch.setattr(db.bans_db, "get_active_ban", _none)
+    monkeypatch.setattr(db.mutes_db, "get_active_mute", _none)
+    monkeypatch.setattr(db.bans_db, "user_ban_count", _three)
+    monkeypatch.setattr(db.bans_db, "user_appeal_count", _zero)
+    monkeypatch.setattr(db.warns_db, "user_total_warns", _boom)
+    monkeypatch.setattr(db.warns_db, "user_warn_groups", _groups)
+    monkeypatch.setattr(db.kicks_db, "user_kick_count", _zero)
+    monkeypatch.setattr(db.mutes_db, "user_mute_count", _zero)
+
+    text, _markup = asyncio.run(
+        check_panels.Check.profile(object(), 2, locale="en-US")  # type: ignore[arg-type]
+    )
+
+    assert t("checking.profile.unknown", "en-US") in text
+
+
 def test_warns_by_group_titles_failure_renders_ids(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

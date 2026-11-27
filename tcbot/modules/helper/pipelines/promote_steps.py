@@ -130,7 +130,13 @@ class Promote:
         if role == "admin":
             if executor_role == "owner":
                 return await assign_admin(
-                    bot, admin_id, admin_fname, target_id, target_fname, locale
+                    bot,
+                    admin_id,
+                    admin_fname,
+                    target_id,
+                    target_fname,
+                    locale,
+                    current_role=current_role,
                 )
             if executor_role == "admin":
                 return await cls.request_admin(
@@ -212,7 +218,9 @@ async def change_role_for_staff(
     if refusal is not None:
         return False, refusal
     try:
-        await db.users_roles.change_role(target_id, role, admin_id)
+        await db.users_roles.change_role(
+            target_id, role, admin_id, expected_role=current_role
+        )
     except Exception:
         log.exception("change_role failed for target=%d role=%s", target_id, role)
         return False, t("admins.role_change.fail", locale)

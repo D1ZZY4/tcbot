@@ -109,6 +109,27 @@ def test_a_tap_without_a_proven_user_is_not_the_prompt_owner(
         )
     )
     assert query.edits == []
+    # * A fail-closed refusal still acknowledges the tap.
+    assert len(query.answers) == 1
+
+
+def test_a_malformed_owner_segment_is_acknowledged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-numeric executor segment fails closed and closes the spinner."""
+
+    async def _locale(_ctx: Any) -> str:
+        return "en-US"
+
+    monkeypatch.setattr("tcbot.modules.helper.guards.locale_for_update", _locale)
+    query = _FakeQuery("demote_cancel:7:not-an-id")
+    ctx = type("Ctx", (), {"effective_user": type("U", (), {"id": 7})()})()
+    assert asyncio.run(
+        prompt_owner_mismatch(
+            query, ctx, min_parts=2, key="admins.error.not_prompt_owner"
+        )
+    )
+    assert query.answers == [("", False)]
 
 
 def test_legacy_cancel_keeps_working(monkeypatch: pytest.MonkeyPatch) -> None:
