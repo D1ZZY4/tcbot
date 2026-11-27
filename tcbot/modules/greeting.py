@@ -629,6 +629,9 @@ async def on_join_request_approved(ctx: Ctx) -> None:
                 user.id,
                 chat_id_of(chat),
             )
+            # * No later join event rechecks an approved request, so a failed
+            # * enforcement must be queued or the member stays unchecked.
+            await _queue_join_repair(ban, chat_id_of(chat), user.id)
             return
         locale = await locale_for_chat(chat)
         await _send_join_ban_notices(
@@ -686,6 +689,7 @@ async def on_join_request_approved(ctx: Ctx) -> None:
             user.id,
             chat_id_of(chat),
         )
+        await _queue_join_repair(mute, chat_id_of(chat), user.id)
 
 
 @decorators.log_execution

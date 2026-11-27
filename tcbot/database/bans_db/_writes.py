@@ -272,6 +272,12 @@ async def create_ban(
             )
     if row is None:
         raise RuntimeError("the ban record was not written")
+    if "ban_id" in row:
+        # * _reuse_existing already returned a composed BanDoc from the
+        # * winning transaction. Feeding it back to compose_rows would read
+        # * raw columns such as external_ref and raise KeyError, turning a
+        # * benign one-active-ban race into a spurious write failure.
+        return cast("BanDoc", row)
     docs = await compose_rows([row])
     document = docs[0]
     run_id = row.get("enforcement_run_id")

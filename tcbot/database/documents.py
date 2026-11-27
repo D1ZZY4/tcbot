@@ -189,6 +189,7 @@ class ActiveMuteDoc(TypedDict, total=False):
     timed mute. Expired timed mutes are filtered out at query time.
     """
 
+    id: int
     user_id: UserId
     until_date: datetime | None
     timestamp: datetime

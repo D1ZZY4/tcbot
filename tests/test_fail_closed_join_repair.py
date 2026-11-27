@@ -280,3 +280,98 @@ async def test_a_repair_queue_outage_does_not_hide_the_removal(
     await greeting._fail_closed_join(bot, -100, 42, "new_member")  # type: ignore[arg-type]
 
     assert len(bot.unbans) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_mute_repair_uses_the_decision_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An active mute carries its decision id, so its repair is actionable."""
+    queued: list[tuple[int, int, int]] = []
+
+    async def _queue(action_id: int, chat_id: int, user_id: int) -> int:
+        queued.append((action_id, chat_id, user_id))
+        return 11
+
+    monkeypatch.setattr(db.enforcement_ledger, "queue_join_enforcement", _queue)
+
+    await greeting._queue_join_repair(
+        {"id": 17, "user_id": 42, "until_date": None},
+        -100,
+        42,  # type: ignore[arg-type]
+    )
+
+    assert queued == [(17, -100, 42)]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_join_restriction_queues_a_repair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A muted joiner must not keep full rights when the restrict call fails."""
+    queued: list[tuple[int, int, int]] = []
+
+    async def _harvest(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def _ban(_user_id: int) -> None:
+        return None
+
+    async def _mute(_user_id: int) -> dict[str, object]:
+        return {"id": 17, "user_id": 42, "until_date": None}
+
+    async def _demote(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def _queue(action_id: int, chat_id: int, user_id: int) -> int:
+        queued.append((action_id, chat_id, user_id))
+        return 12
+
+    class _Bot:
+        async def restrict_chat_member(
+            self, chat_id: int, user_id: int, **_: Any
+        ) -> None:
+            raise RuntimeError("Telegram refused")
+
+    monkeypatch.setattr(db.users_cache, "harvest_user_identity", _harvest)
+    monkeypatch.setattr(greeting, "_ban_state_with_retry", _ban)
+    monkeypatch.setattr(greeting, "_mute_state_with_retry", _mute)
+    monkeypatch.setattr(greeting, "demote_before_enforcement", _demote)
+    monkeypatch.setattr(db.enforcement_ledger, "queue_join_enforcement", _queue)
+
+    member = SimpleNamespace(
+        id=42, is_bot=False, first_name="M", username=None, last_name=None
+    )
+    chat = SimpleNamespace(id=-100, title="Group")
+
+    await greeting._handle_member(
+        member, SimpleNamespace(chat=chat), chat, _Bot(), "en-US", greet=False
+    )  # type: ignore[arg-type]
+
+    assert queued == [(17, -100, 42)]
+
+
+@pytest.mark.asyncio
+async def test_the_active_mute_projection_carries_the_decision_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A real mute reader must supply the id the repair queue needs."""
+
+    async def _fetch_one(_stmt: Any) -> dict[str, Any]:
+        return {
+            "id": 17,
+            "target_user_id": 42,
+            "expires_at": None,
+            "created_at": "stamp",
+        }
+
+    async def _db_call(op: Any) -> Any:
+        return await op()
+
+    monkeypatch.setattr(db.mutes_db, "fetch_one", _fetch_one)
+    monkeypatch.setattr(db.mutes_db, "db_call", _db_call)
+
+    mute = await db.mutes_db.get_active_mute(42)
+
+    assert mute is not None
+    assert mute["id"] == 17

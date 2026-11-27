@@ -328,6 +328,7 @@ async def get_active_mute(user_id: int) -> ActiveMuteDoc | None:
     row = await db_call(
         lambda: fetch_one(
             select(
+                moderation_actions.c.id,
                 moderation_actions.c.target_user_id,
                 moderation_actions.c.expires_at,
                 moderation_actions.c.created_at,
@@ -343,6 +344,7 @@ async def get_active_mute(user_id: int) -> ActiveMuteDoc | None:
     if row is None:
         return None
     return ActiveMuteDoc(
+        id=int(row["id"]),
         user_id=UserId(int(row["target_user_id"])),
         until_date=row.get("expires_at"),
         timestamp=row["created_at"],
@@ -358,6 +360,7 @@ async def active_mute_docs() -> list[ActiveMuteDoc]:
     rows = await db_call(
         lambda: fetch_all(
             select(
+                moderation_actions.c.id,
                 moderation_actions.c.target_user_id,
                 moderation_actions.c.expires_at,
                 moderation_actions.c.created_at,
@@ -371,6 +374,7 @@ async def active_mute_docs() -> list[ActiveMuteDoc]:
     )
     return [
         ActiveMuteDoc(
+            id=int(row["id"]),
             user_id=UserId(int(row["target_user_id"])),
             until_date=row.get("expires_at"),
             timestamp=row["created_at"],
