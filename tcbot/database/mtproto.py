@@ -12,7 +12,7 @@ import os
 import secrets
 import socket
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import msgspec
 from sqlalchemy import select
@@ -41,6 +41,9 @@ _client: Client | None = None
 _lease_owner: str | None = None
 _heartbeat_task: asyncio.Task[None] | None = None
 _auth_dead: bool = False
+# * Teardown tasks spawned by a lookup worker. A worker cannot await its own
+# * dispatcher shutdown, so the stop is detached and tracked until it finishes.
+_park_tasks: set[asyncio.Task[None]] = set()
 
 # * Ceiling for the initial session connect at boot. A network partition
 # * must fail the boot loudly instead of hanging it forever.
@@ -187,7 +190,11 @@ async def start() -> bool:
             # * retry once on the same Client object, which start() resets to
             # * disconnected after a failed login.
             try:
-                await store.clear_session_for_relogin()
+                # ! CRITICAL: the Client owns the peer cache. Clearing only
+                # ! the lease helper's separate storage instance leaves stale
+                # ! InputPeer entries that resolve offline after a relogin.
+                client_store = getattr(c, "storage", store)
+                await cast("PostgresStorage", client_store).clear_session_for_relogin()
                 if not await store.refresh_owner(owner, ttl_s=_LEASE_TTL_S):
                     raise RuntimeError("MTProto lease was lost during session recovery")
                 async with asyncio.timeout(_START_TIMEOUT_S):
@@ -457,12 +464,31 @@ async def handle_auth_failure() -> None:
         "'%s:*' docs from mtproto_state, then boot one.",
         cfg.mtproto_session,
     )
+
+    def _teardown_done(task: asyncio.Task[None]) -> None:
+        _park_tasks.discard(task)
+        if not task.cancelled():
+            exc = task.exception()
+            if exc is not None:
+                log.debug("MTProto park-teardown failed (non-fatal): %s", exc)
+
     try:
-        await stop()
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        log.debug("MTProto park-teardown failed (non-fatal): %s", exc)
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        try:
+            await stop()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.debug("MTProto park-teardown failed (non-fatal): %s", exc)
+        return
+    # ! CRITICAL: Client.stop() joins dispatcher workers, including the lookup
+    # ! worker calling this function. Awaiting it here deadlocks until the
+    # ! worker is cancelled. Detach the teardown; _auth_dead already stops all
+    # ! further lookups from reusing the dead session.
+    task = loop.create_task(stop(), name="tcbot.mtproto-park-teardown")
+    _park_tasks.add(task)
+    task.add_done_callback(_teardown_done)
 
 
 # ───────────────────────── Identity resolution ─────────────────────── #
