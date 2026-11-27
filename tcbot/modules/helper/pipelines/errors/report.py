@@ -537,6 +537,13 @@ async def send_to_owner(
         await send_rich(_bot, _owner_id, payload)
     except Exception as exc:
         log.warning("Failed to send owner DM: %s", exc)
+        # * An infra-only alert must not vanish because the owner DM is
+        # * undeliverable. Fall back to the configured error channel. The
+        # * fingerprint was already marked seen by _approved, so re-entering
+        # * the dedupe gate here would suppress this report. Guard the case
+        # * where attach() had no log channel and pointed _chat_id at the owner.
+        if _chat_id and _chat_id != _owner_id:
+            await send_to_log_errors(payload)
         return
     if fp is not None:
         _owner_record_sent(fp)

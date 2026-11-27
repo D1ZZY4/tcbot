@@ -97,3 +97,51 @@ def test_owner_dm_uses_the_rich_payload(monkeypatch: Any) -> None:
             "rich_message": {"html": "<p>owner</p>"},
         }
     ]
+
+
+def test_a_failed_owner_dm_falls_back_to_the_log_channel(monkeypatch: Any) -> None:
+    calls: list[dict[str, Any]] = []
+
+    class _Bot:
+        async def send_rich_message(
+            self, chat_id: Any, rich_message: Any, **_kwargs: Any
+        ) -> str:
+            if chat_id == 123:
+                raise RuntimeError("owner unreachable")
+            return "sent"
+
+    async def _log(payload: dict[str, Any]) -> None:
+        calls.append(payload)
+
+    monkeypatch.setattr(error_reporter, "_bot", _Bot())
+    monkeypatch.setattr(error_reporter, "_owner_id", 123)
+    monkeypatch.setattr(error_reporter, "_chat_id", -100)
+    monkeypatch.setattr(error_reporter, "_thread_id", None)
+    monkeypatch.setattr(error_reporter, "send_to_log_errors", _log)
+
+    asyncio.run(error_reporter.send_to_owner({"html": "<p>owner</p>"}))
+
+    assert calls == [{"html": "<p>owner</p>"}]
+
+
+def test_no_owner_fallback_when_the_log_channel_is_the_owner(monkeypatch: Any) -> None:
+    calls: list[dict[str, Any]] = []
+
+    class _Bot:
+        async def send_rich_message(
+            self, chat_id: Any, rich_message: Any, **_kwargs: Any
+        ) -> str:
+            raise RuntimeError("owner unreachable")
+
+    async def _log(payload: dict[str, Any]) -> None:
+        calls.append(payload)
+
+    monkeypatch.setattr(error_reporter, "_bot", _Bot())
+    monkeypatch.setattr(error_reporter, "_owner_id", 123)
+    monkeypatch.setattr(error_reporter, "_chat_id", 123)
+    monkeypatch.setattr(error_reporter, "_thread_id", None)
+    monkeypatch.setattr(error_reporter, "send_to_log_errors", _log)
+
+    asyncio.run(error_reporter.send_to_owner({"html": "<p>owner</p>"}))
+
+    assert calls == []
