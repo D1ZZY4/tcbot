@@ -231,7 +231,6 @@ async def change_role_for_staff(
                 target_locale,
                 role=role_label,
                 community=cfg.community_name,
-                plain=True,
             ),
         ),
         return_exceptions=True,

@@ -250,7 +250,6 @@ async def execute_promo_decision(ctx: Ctx) -> None:
                     "admins.decision.approve_dm",
                     target_locale,
                     community=cfg.community_name,
-                    plain=True,
                 ),
             ),
             send_log(ctx.bot, log_text),

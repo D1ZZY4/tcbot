@@ -825,7 +825,7 @@ async def cmd_promote_request(ctx: Ctx) -> None:
         label = db.users_roles.role_label(existing_role)
         await reply_rich(
             msg,
-            t("admins.request.already_role", locale, role=label, plain=True),
+            t("admins.request.already_role", locale, role=label),
             log_label="cmd_promote_request already-role",
             parse_mode=None,
         )

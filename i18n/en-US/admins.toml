@@ -71,9 +71,9 @@ body = """
 `/tcplist` list pending promotion requests"""
 
 # Runtime strings for promotion (promote_flow.py).
-# Reply texts render as rich HTML; DMs send plain (no parse_mode).
+# Every surface renders as rich HTML through the rich transports.
 # Placeholders: {user} pre-formatted user reference, {role}/{label}/
-# {community} raw values.
+# {community} raw values escaped once by the renderer.
 
 [promote]
 save_fail = "Failed to save the promotion. Please try again."
@@ -92,8 +92,8 @@ no_assign_perms = "You don't have permission to assign this role."
 admin = "You've been promoted to Admin in {community} - welcome to the staff team."
 role = "You've been assigned the {role} role in {community} - welcome to the team."
 
-# Role changes for an existing staff member. The picker and replies render
-# rich HTML; the DM is plain. {user} is pre-formatted, other values are raw.
+# Role changes for an existing staff member. Every surface renders as rich
+# HTML. {user} is pre-formatted, other values are escaped by the renderer.
 [role_change]
 picker = "Choose the new role for {user} (currently {role}):"
 no_role = "{user} does not hold a federation role. Use /tcpromote instead."
@@ -130,7 +130,7 @@ bot_target = "Bots cannot hold federation roles or ownership."
 banned_target = "Banned users cannot hold federation roles or ownership. Lift the ban first."
 
 # Promote/demote/transfer/list/decision UI. [role_picker]/[confirm]/
-# [transfer]/[list]/[card] render as rich HTML; [decision.dm] sends plain.
+# [transfer]/[list]/[card]/[decision.dm] render as rich HTML.
 
 [promote_ui]
 role_picker = "Choose a role to assign to {user}:"

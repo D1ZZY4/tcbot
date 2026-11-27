@@ -71,9 +71,9 @@ body = """
 `/tcplist` daftar permintaan promosi tertunda"""
 
 # Runtime strings for promotion (promote_flow.py).
-# Reply texts render as rich HTML; DMs send plain (no parse_mode).
-# Placeholders: {user} pre-formatted user reference, {role}/{label}/
-# {community} raw values.
+# Setiap permukaan dirender sebagai rich HTML lewat transport rich.
+# Placeholder: {user} referensi pengguna yang sudah terformat, {role}/{label}/
+# {community} nilai mentah yang di-escape sekali oleh renderer.
 
 [promote]
 save_fail = "Gagal menyimpan promosi. Coba lagi."
@@ -92,8 +92,8 @@ no_assign_perms = "Kamu tidak punya izin untuk memberi peran ini."
 admin = "Kamu dipromosikan jadi Admin di {community}, selamat datang di tim staf."
 role = "Kamu diberi peran {role} di {community}, selamat datang di tim."
 
-# Perubahan peran untuk staf yang sudah ada. Pemilih dan balasan memakai rich
-# HTML; DM polos. {user} sudah terformat, nilai lain mentah.
+# Perubahan peran untuk staf yang sudah ada. Semua permukaan memakai rich HTML.
+# {user} sudah terformat, nilai lain di-escape oleh renderer.
 [role_change]
 picker = "Pilih peran baru untuk {user} (saat ini {role}):"
 no_role = "{user} tidak memegang peran federasi. Pakai /tcpromote sebagai gantinya."
@@ -130,7 +130,7 @@ bot_target = "Bot tidak dapat memegang peran atau kepemilikan federasi."
 banned_target = "Pengguna ter-ban tidak dapat memegang peran atau kepemilikan federasi. Cabut ban dulu."
 
 # Promote/demote/transfer/list/decision UI. [role_picker]/[confirm]/
-# [transfer]/[list]/[card] render as rich HTML; [decision.dm] sends plain.
+# [transfer]/[list]/[card]/[decision.dm] render sebagai rich HTML.
 
 [promote_ui]
 role_picker = "Pilih peran untuk {user}:"

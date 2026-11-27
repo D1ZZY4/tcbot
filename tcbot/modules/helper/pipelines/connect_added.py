@@ -416,7 +416,6 @@ class BuildConnection(
             "connecting.state.connected",
             locale,
             community=self.community_name,
-            plain=True,
         )
 
     def connected_blind_message(self, locale: str | None = None) -> str:
@@ -425,7 +424,6 @@ class BuildConnection(
             "connecting.state.connected_blind",
             locale,
             community=self.community_name,
-            plain=True,
         )
 
     def declined_message(self, locale: str | None = None) -> str:
@@ -438,7 +436,6 @@ class BuildConnection(
             "connecting.state.already_connected",
             locale,
             community=self.community_name,
-            plain=True,
         )
 
     def connecting_message(self, locale: str | None = None) -> str:
