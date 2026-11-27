@@ -15,6 +15,7 @@ from loguru import logger as loguru_logger
 from tcbot import utils
 from tcbot.utils.logger import (
     BotLogFormatter,
+    _early_console_sink,
     _format_percent,
     _safe_time_parts,
     get_logger,
@@ -99,6 +100,18 @@ def test_formatter_handles_bad_percent_args() -> None:
     )
     out = BotLogFormatter().format(record)
     assert "count" in out
+
+
+def test_import_time_console_sink_redacts_credentials(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Lines emitted before setup() must not bypass shape redaction."""
+    token = "123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    _early_console_sink(type("M", (), {"record": {"message": f"login {token}"}})())
+
+    out = capsys.readouterr().err
+    assert token not in out
+    assert "[REDACTED_TOKEN]" in out
 
 
 def test_formatter_redacts_credentials_in_the_message() -> None:

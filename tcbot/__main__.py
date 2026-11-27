@@ -481,8 +481,8 @@ def main() -> None:
     stage = "logging setup"
     try:
         setup_logging(level=cfg.log_level)
-        # * Console redaction must be active before any startup log line:
-        # * attach() runs later, after PostgreSQL and MTProto are connected.
+        # * Shape redaction has been active since logger import; register the
+        # * exact configured values now. attach() only ships records to Telegram.
         set_text_scrubber(report.scrub_text)
         _init_sentry()
         log.info("Starting %s bot (Kurigram polling)...", cfg.community_name)

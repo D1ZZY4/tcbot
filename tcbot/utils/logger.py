@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import sys
 import threading
 from contextvars import ContextVar
 from datetime import UTC, datetime
@@ -154,9 +155,10 @@ _SUPPRESS_PREFIXES: tuple[str, ...] = (
 # * dependency one-way.
 _record_sink: Callable[[logging.LogRecord], None] | None = None
 
-# * Shape-based redaction runs on every console line even before the reporter
-# * attaches. The hook adds replacement of exact configured values once they
-# * are known; it is registered alongside the record sink for the same reason.
+# * Shape-based redaction is installed on Loguru's console sink at import time,
+# * so import-time lines are covered. The hook adds replacement of exact
+# * configured values once they are known; the record sink below only ships
+# * errors to Telegram and is registered much later by the reporter.
 _text_scrubber: Callable[[str], str] | None = None
 
 
@@ -176,6 +178,22 @@ def _scrub_console(text: str) -> str:
     """
     scrubber = _text_scrubber
     return scrubber(text) if scrubber is not None else redact_credential_shapes(text)
+
+
+def _early_console_sink(message: Any) -> None:
+    """Render import-time records through the same credential scrubber.
+
+    Loguru installs a default stderr sink when it is imported, which bypasses
+    ``BotLogFormatter`` and would print a token-shaped value verbatim. Replace
+    it here, before any project module can log during configuration load.
+    ``setup()`` removes this sink and installs the bridge.
+    """
+    text = _scrub_console(str(message.record["message"]))
+    print(text, file=sys.stderr)
+
+
+logger.remove()
+logger.add(_early_console_sink, level="DEBUG")
 
 
 # * Loguru handlers hold a non-reentrant thread-local lock while a sink runs.
