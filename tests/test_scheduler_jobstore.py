@@ -214,8 +214,9 @@ def test_reconcile_reads_the_store_once_instead_of_per_job(
     Every job-store call checks a connection out of a remote pool, and a
     healthy boot used to issue one lookup and one removal per schedule.
     That path crossed the readiness window on a slow pooler and turned a
-    working deploy into a restart loop. One bulk read must replace all of
-    them, and an unchanged schedule must cost no write at all.
+    working deploy into a restart loop. One bulk read builds the wanted set
+    and a second bulk read sweeps unknown ids; an unchanged schedule costs
+    no write at all.
     """
     local_store = _FakeJobStore()
     monkeypatch.setattr(sched_mod, "_build_job_store", lambda _url: local_store)
@@ -253,7 +254,7 @@ def test_reconcile_reads_the_store_once_instead_of_per_job(
 
     asyncio.run(_run())
 
-    assert len(reads) == 1
+    assert len(reads) == 2
     assert writes == []
     assert removed == []
 
@@ -350,3 +351,41 @@ def test_the_job_store_uses_the_application_schema(
     options = captured["kwargs"]["connect_args"]["options"]
     assert "search_path=development" in options
     assert "timezone=UTC" in options
+
+
+def test_an_unknown_persisted_schedule_is_removed_on_boot(
+    store: _FakeJobStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A resolvable job outside the catalogue must not keep firing forever."""
+    store.jobs["tcbot.unknown_legacy"] = SimpleNamespace(
+        id="tcbot.unknown_legacy", func=sched_mod.expire_due_decisions
+    )
+
+    _run_scheduler()
+
+    assert "tcbot.unknown_legacy" not in store.jobs
+
+
+def test_schedule_removal_retries_a_transient_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A transient job-store refusal must not leave a retired schedule live."""
+    attempts: list[str] = []
+
+    class _Scheduler:
+        def remove_job(self, job_id: str, *, jobstore: str) -> None:
+            attempts.append(job_id)
+            if len(attempts) == 1:
+                raise RuntimeError("pool checkout refused")
+            _ = jobstore
+
+    monkeypatch.setattr(sched_mod.time, "sleep", lambda _seconds: None)
+
+    sched_mod._remove_job(
+        cast("Any", _Scheduler()),
+        sched_mod._LEGACY_SYNC_SCHEDULE_ID,
+        "Enforcement sync",
+        stored=None,
+    )
+
+    assert len(attempts) == 2

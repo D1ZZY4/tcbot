@@ -17,6 +17,7 @@ import asyncio
 import concurrent.futures
 import contextlib
 import functools
+import time
 from datetime import UTC
 from typing import TYPE_CHECKING, Any
 
@@ -61,6 +62,12 @@ _sched_error: BaseException | None = None
 # * Maximum seconds to wait for the scheduler background task to exit cleanly
 # * before declaring it stuck. Ten seconds is the bot's shutdown grace window.
 _STOP_TIMEOUT_S: float = 10.0
+
+# * A job-store removal can fail transiently while a pooled connection is
+# * being replaced. Retry a few times on the dedicated worker thread so a
+# * retired schedule cannot keep firing after a healthy boot reports ready.
+_REMOVAL_RETRIES: int = 3
+_REMOVAL_RETRY_DELAY_S: float = 0.2
 
 # * Maximum seconds to wait for the scheduler to become ready. The job store
 # * reaches PostgreSQL over the network, so a slow or cold pooler (a remote
@@ -338,10 +345,10 @@ def _stored_jobs(store: SQLAlchemyJobStore) -> dict[str, Job] | None:
     The schedule reconciliation used to issue one ``lookup_job`` and one
     ``remove_job`` per known schedule. Every job-store call checks a
     connection out of a remote pool, and a pooled PostgreSQL checkout costs
-    a round trip of its own, so nine separate calls pushed a healthy boot
-    past the readiness window. One bulk read replaces all of them; ``None``
-    means the read failed and the caller falls back to replacing every
-    schedule.
+    a round trip of its own, so ten separate calls pushed a healthy boot
+    past the readiness window. One bulk read replaces them, and a fresh read
+    after registration sweeps unknown ids; ``None`` means the read failed and
+    the caller falls back to replacing every schedule.
     """
     try:
         return {job.id: job for job in store.get_all_jobs()}
@@ -423,17 +430,23 @@ def _remove_job(
     if stored is not None and job_id not in stored:
         log.debug("%s schedule not present, nothing to remove.", label)
         return
-    try:
-        scheduler.remove_job(job_id, jobstore=_JOBSTORE_ALIAS)
-        log.info("Removed %s schedule.", label)
-    except JobLookupError:
-        log.debug("%s schedule not present, nothing to remove.", label)
-    except Exception as exc:
-        log.warning(
-            "%s schedule removal failed: a stale schedule may keep firing: %s",
-            label,
-            exc,
-        )
+    for attempt in range(_REMOVAL_RETRIES):
+        try:
+            scheduler.remove_job(job_id, jobstore=_JOBSTORE_ALIAS)
+            log.info("Removed %s schedule.", label)
+            return
+        except JobLookupError:
+            log.debug("%s schedule not present, nothing to remove.", label)
+            return
+        except Exception as exc:
+            if attempt + 1 < _REMOVAL_RETRIES:
+                time.sleep(_REMOVAL_RETRY_DELAY_S)
+                continue
+            log.warning(
+                "%s schedule removal failed: a stale schedule may keep firing: %s",
+                label,
+                exc,
+            )
 
 
 def _reconcile_schedules(
@@ -600,6 +613,29 @@ def _reconcile_schedules(
         "Enforcement sync",
         stored=stored,
     )
+
+    # * A stored row outside the catalogue is not reconciled by the branches
+    # * above. Its callable may still resolve because the package deliberately
+    # * keeps legacy job names importable, so APScheduler leaves it firing
+    # * forever. Take one fresh bulk read after registration and remove every
+    # * id that is no longer wanted; this also retries a known-but-unwanted
+    # * removal that failed above.
+    wanted = {
+        _PROMOTION_EXPIRY_SCHEDULE_ID,
+        _ERASURE_SCHEDULE_ID,
+        _RETENTION_SCHEDULE_ID,
+        _CLEANUP_SCHEDULE_ID,
+    }
+    if not database_jobs_in_pg_cron:
+        wanted.add(_EXPIRY_SCHEDULE_ID)
+    if enforcement_job is not None:
+        wanted.add(_ENFORCEMENT_WORKER_SCHEDULE_ID)
+    if notification_job is not None:
+        wanted.add(_NOTIFICATION_WORKER_SCHEDULE_ID)
+    fresh = _stored_jobs(store)
+    if fresh is not None:
+        for stale_id in fresh.keys() - wanted:
+            _remove_job(scheduler, stale_id, f"Stale schedule {stale_id}", stored=fresh)
 
 
 # ──────────────────────────── Lifecycle ──────────────────────────── #
