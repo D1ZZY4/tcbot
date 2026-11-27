@@ -6,11 +6,20 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from scripts.check_migration import CHECK_SCHEMA, _alembic_config
 from scripts.check_schema import CHECK_SCHEMA as INVARIANT_SCHEMA
-from scripts.dump_schema import _require_export, _validate_schema
+from scripts.dump_schema import (
+    _FUNCTION_NAME,
+    _function_domain,
+    _loaded_function_domains,
+    _require_export,
+    _validate_function_domains,
+    _validate_schema,
+)
 from scripts.print_guard_messages import PROBE_SCHEMA
 
 
@@ -81,6 +90,27 @@ def test_dump_schema_refuses_a_missing_object_kind() -> None:
 
     with pytest.raises(SystemExit, match=r"triggers\.sql"):
         _require_export(grouped, ["INSERT INTO seed"], minimums)
+
+
+def test_every_committed_function_routes_to_a_loaded_file() -> None:
+    """A regeneration must never move a function into an unloaded file."""
+    root = Path(__file__).resolve().parents[1]
+    functions_dir = root / "tcbot" / "database" / "schema" / "functions"
+    names = [
+        match.group(1)
+        for path in functions_dir.glob("*.sql")
+        for match in _FUNCTION_NAME.finditer(path.read_text(encoding="utf-8"))
+    ]
+    assert names
+    assert all(_function_domain(name) in _loaded_function_domains() for name in names)
+    assert _function_domain("guard_erased_user_identity") == "identity"
+    assert _function_domain("validate_moderation_evidence_upload") == "moderation_audit"
+
+
+def test_dump_schema_refuses_an_unloaded_function_domain() -> None:
+    """An unknown domain aborts before any schema file is rewritten."""
+    with pytest.raises(SystemExit, match="no file in the schema loader"):
+        _validate_function_domains({"core": ["CREATE FUNCTION f() RETURNS void"]})
 
 
 def test_dump_schema_refuses_a_partial_but_nonempty_export() -> None:

@@ -43,7 +43,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from tcbot import DB_SCHEMAS  # noqa: E402
-from tcbot.database.schema.loader import split_statements  # noqa: E402
+from tcbot.database.schema.loader import SCHEMA_FILES, split_statements  # noqa: E402
 
 # * The directory the schema files live in.
 SCHEMA_DIR: Path = Path(__file__).resolve().parents[1] / "tcbot" / "database" / "schema"
@@ -314,6 +314,7 @@ _RBAC_PREFIXES = (
 )
 _IDENTITY_PREFIXES = (
     "ensure_connected",
+    "guard_erased",
     "guard_community",
     "guard_join",
     "repoint_chat",
@@ -322,7 +323,13 @@ _IDENTITY_PREFIXES = (
     "prevent_historical",
     "set_updated_at",
 )
-_AUDIT_PREFIXES = ("guard_appeal_ban_target", "validate_audit_event_entity")
+_AUDIT_PREFIXES = (
+    "guard_appeal_ban_target",
+    "validate_audit_event_entity",
+    # * Checked before the broad moderation prefixes so this function stays in
+    # * the file the committed schema already owns.
+    "validate_moderation_evidence_upload",
+)
 _MTPROTO_PREFIXES = ("mtproto_state_", "prune_expired_mtproto_state")
 
 
@@ -351,6 +358,32 @@ def _function_groups(statements: list[str]) -> dict[str, list[str]]:
         name = match.group(1) if match else ""
         grouped.setdefault(_function_domain(name), []).append(statement)
     return grouped
+
+
+def _loaded_function_domains() -> frozenset[str]:
+    """Return the function domains the schema loader actually applies."""
+    return frozenset(
+        Path(name).stem
+        for name in SCHEMA_FILES
+        if name.startswith("functions/") and name.endswith(".sql")
+    )
+
+
+def _validate_function_domains(grouped: dict[str, list[str]]) -> None:
+    """Refuse to export when a function would land in a file nobody loads.
+
+    An unrecognised name used to fall into ``functions/core.sql``, which is
+    not in the loader's file list. Regenerating the schema then moved the
+    guard out of the applied files without changing any exported count.
+    """
+    unknown = sorted(set(grouped) - _loaded_function_domains())
+    if unknown:
+        raise SystemExit(
+            "Refusing to export: function domain(s) "
+            + ", ".join(unknown)
+            + " have no file in the schema loader. Add the domain before "
+            "regenerating; committed files were not changed."
+        )
 
 
 def _write(name: str, statements: list[str], schema: str, header: str) -> None:
@@ -493,6 +526,7 @@ def main() -> int:
     dump = _dump(url, schema)
     grouped = _split(dump)
     function_files = _function_groups(grouped["functions.sql"])
+    _validate_function_domains(function_files)
     seed = _seed_statements(url, schema)
     _require_export(grouped, seed)
 
@@ -502,6 +536,12 @@ def main() -> int:
         schema,
         "-- The read-only views of the community.",
     )
+    for domain in sorted(_loaded_function_domains() - function_files.keys()):
+        # * A domain with no functions must not keep a stale file: the loader
+        # * would re-apply removed objects from it on every later migration.
+        _write(
+            f"functions/{domain}.sql", [], schema, f"-- Database functions: {domain}."
+        )
     for domain, statements in sorted(function_files.items()):
         _write(
             f"functions/{domain}.sql",
