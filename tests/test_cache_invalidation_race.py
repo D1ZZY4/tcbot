@@ -10,11 +10,13 @@ import asyncio
 import dataclasses
 from typing import Any
 
+import msgspec
 import pytest
 
 from tcbot import cfg
 from tcbot.database import users_cache
 from tcbot.database.cache import CACHE_MISS, redis_io, twolevel, user_mention_cache
+from tcbot.database.cache.codec import _msgspec_enc_hook, _tag_scalars
 from tcbot.database.cache.twolevel import TwoLevelCache
 
 
@@ -530,6 +532,84 @@ def test_a_read_that_overlaps_clear_all_does_not_repopulate_l1() -> None:
         patch.setattr(redis_io, "acquire_redis_client", _no_client)
         patch.setattr(redis_io, "enqueue_redis_mutation", _enqueue)
         asyncio.run(_run())
+
+
+def test_an_l2_hit_cannot_outlive_a_clear_all_sweep() -> None:
+    """A read during the sweep must not promote the value about to be deleted.
+
+    ``clear_all`` bumps the epoch before the Redis sweep, so a reader that
+    starts mid-sweep captures the new epoch and cannot detect the old value
+    with the epoch check alone. The sweep marker must force that reader to
+    the source instead of serving the stale L2 entry.
+    """
+
+    class _SweepingRedis:
+        """Redis double that blocks the sweep and holds a stale value."""
+
+        def __init__(self, key: str, stale: str) -> None:
+            self.store = {key: stale}
+            self.scan_started = asyncio.Event()
+            self.scan_release = asyncio.Event()
+
+        async def scan(self, cursor: int, match: str = "", count: int = 100):
+            _ = (cursor, match, count)
+            self.scan_started.set()
+            await self.scan_release.wait()
+            return 0, []
+
+        async def get(self, key: str) -> str | None:
+            return self.store.get(key)
+
+        async def mget(self, *keys: str) -> list[str | None]:
+            return [self.store.get(key) for key in keys]
+
+        async def set(self, *args: Any, **kwargs: Any) -> None:
+            _ = (args, kwargs)
+
+        async def unlink(self, *keys: str) -> int:
+            for key in keys:
+                self.store.pop(key, None)
+            return len(keys)
+
+    def _encode(value: str) -> str:
+        return msgspec.json.encode(
+            _tag_scalars(value), enc_hook=_msgspec_enc_hook
+        ).decode("utf-8")
+
+    async def _run() -> None:
+        cache = TwoLevelCache(memory_ttl=60, redis_ttl=90, redis_prefix="role")
+        stale_key = cache._rkey("owner")
+        fake = _SweepingRedis(stale_key, _encode("old-owner"))
+
+        async def _enqueue(
+            prefix: str, factory: Any, *, droppable: bool = False
+        ) -> asyncio.Task[Any]:
+            _ = (prefix, droppable)
+            return asyncio.create_task(factory())
+
+        async def _no_client() -> None:
+            return None
+
+        async def _fetch() -> str:
+            return "new-owner"
+
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(
+                twolevel, "cfg", dataclasses.replace(cfg, redis_url="redis://test")
+            )
+            patch.setattr(redis_io, "usable_redis_client", lambda: fake)
+            patch.setattr(redis_io, "acquire_redis_client", _no_client)
+            patch.setattr(redis_io, "enqueue_redis_mutation", _enqueue)
+
+            sweeping = asyncio.create_task(cache.clear_all())
+            await fake.scan_started.wait()
+            reading = asyncio.create_task(cache.get_or_fetch("owner", _fetch))
+            await asyncio.sleep(0)
+            fake.scan_release.set()
+            await sweeping
+
+        assert await reading == "new-owner"
+        assert cache.get("owner") is CACHE_MISS
 
 
 def test_a_batch_fill_discards_rows_invalidated_during_the_read(

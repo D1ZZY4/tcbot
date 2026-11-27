@@ -89,6 +89,7 @@ class TwoLevelCache[T]:
         "_redis_ttl",
         "_revision",
         "_states",
+        "_sweep_depth",
     )
 
     def __init__(
@@ -118,6 +119,11 @@ class TwoLevelCache[T]:
         # * sides of the Redis sweep: a read that overlaps the sweep can no
         # * longer publish the pre-sweep value into L1 after the sweep ends.
         self._epoch: int = 0
+        # * How many L2 sweeps are queued or running. A reader that starts
+        # * after clear_all's first epoch bump captures the NEW epoch, so the
+        # * epoch checks alone cannot tell it that an old L2 value is about
+        # * to be deleted. The depth closes that window locally.
+        self._sweep_depth: int = 0
         # * Monotonic mutation counter. A batch reader that is about to fill
         # * many keys at once captures it before its source read and skips
         # * the fill when it changed, so an invalidation that lands during
@@ -242,6 +248,7 @@ class TwoLevelCache[T]:
         # * its pre-sweep result, and bump the cache-wide epoch so a read
         # * that starts mid-sweep cannot republish into L1.
         self._epoch += 1
+        self._sweep_depth += 1
         for state in self._states.values():
             state.generation += 1
         pattern = f"{self._namespace()}:{self._redis_prefix}:v2:*"
@@ -251,6 +258,7 @@ class TwoLevelCache[T]:
             # * discarded by the second epoch bump, and anything they
             # * already wrote into L1 is cleared here.
             self._mem.clear()
+            self._sweep_depth = max(0, self._sweep_depth - 1)
             self._epoch += 1
             self._revision += 1
 
@@ -372,6 +380,7 @@ class TwoLevelCache[T]:
             if (
                 state.generation == generation
                 and self._epoch == epoch
+                and self._sweep_depth == 0
                 and key not in self._pending_invalidations
                 and key not in self._pending_writes
             ):
@@ -459,6 +468,7 @@ class TwoLevelCache[T]:
                     if (
                         states[key].generation == generations[key]
                         and self._epoch == epoch
+                        and self._sweep_depth == 0
                         and key not in self._pending_writes
                     ):
                         self._mem.put(key, loaded)
@@ -508,6 +518,7 @@ class TwoLevelCache[T]:
                 rc = await self._client()
                 if (
                     rc is not None
+                    and self._sweep_depth == 0
                     and key not in self._pending_invalidations
                     and (
                         not self._critical_delete or not await self._tombstoned(rc, key)
@@ -557,6 +568,7 @@ class TwoLevelCache[T]:
                                 elif (
                                     state.generation != generation
                                     or self._epoch != epoch
+                                    or self._sweep_depth > 0
                                     or key in self._pending_invalidations
                                     or key in self._pending_writes
                                 ):
@@ -570,6 +582,7 @@ class TwoLevelCache[T]:
                                     revoked = (
                                         state.generation != generation
                                         or self._epoch != epoch
+                                        or self._sweep_depth > 0
                                         or key in self._pending_invalidations
                                     )
                                     log.debug(

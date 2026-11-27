@@ -92,6 +92,24 @@ def _run_scheduler() -> None:
     asyncio.run(_run())
 
 
+def test_unwind_survives_a_second_cancellation() -> None:
+    """Cleanup must finish even when the caller is cancelled again mid-join."""
+
+    async def _run() -> None:
+        victim = asyncio.create_task(asyncio.Event().wait())
+        unwind = asyncio.create_task(sched_mod._unwind_scheduler_task(victim))
+        await asyncio.sleep(0)
+        unwind.cancel()
+        try:
+            await unwind
+        except asyncio.CancelledError:
+            pytest.fail("scheduler unwind propagated a second cancellation")
+        await asyncio.sleep(0)
+        assert victim.done()
+
+    asyncio.run(_run())
+
+
 def test_schedule_match_checks_the_callable() -> None:
     """A stored job pointing at an older function must be replaced."""
 
@@ -102,9 +120,11 @@ def test_schedule_match_checks_the_callable() -> None:
         return None
 
     trigger = IntervalTrigger(minutes=5, timezone=sched_mod._SCHEDULER_TIMEZONE)
-    job = SimpleNamespace(trigger=trigger, args=(), func=_old)
-    assert sched_mod._schedule_matches(cast("Any", job), _old, trigger, ()) is True
-    assert sched_mod._schedule_matches(cast("Any", job), _new, trigger, ()) is False
+    job = SimpleNamespace(
+        trigger=trigger, args=(), func=_old, misfire_grace_time=60, coalesce=True
+    )
+    assert sched_mod._schedule_matches(cast("Any", job), _old, trigger, (), 60) is True
+    assert sched_mod._schedule_matches(cast("Any", job), _new, trigger, (), 60) is False
 
 
 def test_schedules_land_in_the_persistent_job_store(store: _FakeJobStore) -> None:
@@ -179,6 +199,27 @@ def test_unchanged_schedule_keeps_its_persisted_fire_time(
     _run_scheduler()
 
     assert store.jobs[sched_mod._EXPIRY_SCHEDULE_ID].next_run_time == persisted_next_run
+
+
+def test_changed_recovery_settings_replace_the_stored_job(
+    store: _FakeJobStore,
+) -> None:
+    """An upgrade that widens the misfire window must reach persisted jobs.
+
+    Reconciliation used to keep a stored job when its cadence and callable
+    matched, so a grace window from an older build survived forever. A bot
+    restarting after that window could silently drop the daily expiry run.
+    """
+    _run_scheduler()
+    persisted = store.jobs[sched_mod._EXPIRY_SCHEDULE_ID]
+    persisted.misfire_grace_time = 1
+    persisted.coalesce = False
+
+    _run_scheduler()
+
+    rewritten = store.jobs[sched_mod._EXPIRY_SCHEDULE_ID]
+    assert rewritten.misfire_grace_time == 86400
+    assert rewritten.coalesce is True
 
 
 def test_the_retired_warn_expiry_schedule_is_not_registered(

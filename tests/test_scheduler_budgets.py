@@ -53,6 +53,62 @@ def test_a_failed_sweep_does_not_report_success(
         asyncio.run(scheduler.expire_due_decisions())
 
 
+def test_expiry_invalidates_the_cached_roles_of_expired_users(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A role that expires on schedule must leave the cache immediately.
+
+    The sweep flips the rows in the database, but non-fresh readers get
+    their role from the two-level cache. Without an invalidation after the
+    commit, those readers keep serving the expired role for the whole TTL.
+    """
+
+    class _ScalarResult:
+        def __init__(self, value: Any) -> None:
+            self._value = value
+
+        def scalar(self) -> Any:
+            return self._value
+
+    class _RowsResult:
+        def __init__(self, rows: list[tuple[int, ...]]) -> None:
+            self._rows = rows
+
+        def __iter__(self) -> Any:
+            return iter(self._rows)
+
+    class _Session:
+        async def scalar(self, statement: Any, params: Any = None) -> bool:
+            _ = (statement, params)
+            return True
+
+        async def execute(self, statement: Any) -> Any:
+            sql = str(statement)
+            if "expire_due_moderation_actions" in sql:
+                return _ScalarResult({"expired": 1})
+            if "SELECT DISTINCT user_id" in sql:
+                return _RowsResult([(42,), (43,)])
+            if "expire_due_role_assignments_and_audit" in sql:
+                return _ScalarResult({"expired_role_assignments": 2})
+            raise AssertionError(f"unexpected statement: {sql}")
+
+    async def _fake_run_transaction(op: Any, **kwargs: Any) -> Any:
+        _ = kwargs
+        return await op(_Session())
+
+    invalidated: list[int] = []
+    monkeypatch.setattr(scheduler_jobs, "run_transaction", _fake_run_transaction)
+    monkeypatch.setattr(
+        type(scheduler_jobs.effective_role_cache),
+        "invalidate",
+        lambda _self, key: invalidated.append(key),
+    )
+
+    asyncio.run(scheduler.expire_due_decisions())
+
+    assert invalidated == [42, 43]
+
+
 def test_the_retention_sweep_runs_the_registry_job(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

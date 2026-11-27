@@ -315,7 +315,11 @@ async def _scheduler_background(
 
 
 def _schedule_matches(
-    job: Job, func: Callable[..., Any], trigger: IntervalTrigger, args: tuple[Any, ...]
+    job: Job,
+    func: Callable[..., Any],
+    trigger: IntervalTrigger,
+    args: tuple[Any, ...],
+    misfire_grace_time: int,
 ) -> bool:
     """Return True when the stored job already runs the desired schedule.
 
@@ -326,7 +330,9 @@ def _schedule_matches(
     persisted against the host-local zone is replaced once the schedules run
     on UTC. The callable is compared as well: a stored job that points at an
     older implementation at the same cadence must be replaced, or a code fix
-    would never run.
+    would never run. The recovery settings are compared too: a persisted grace
+    window from an older build would otherwise survive every upgrade and drop
+    a run that the current code intends to survive an outage.
     """
     stored_trigger = job.trigger
     if not isinstance(stored_trigger, IntervalTrigger):
@@ -335,6 +341,10 @@ def _schedule_matches(
         return False
     stored_func = getattr(job, "func", None)
     if stored_func is not func and stored_func != func:
+        return False
+    # * A grace window or coalescing change is a code change, not a schedule
+    # * change. Rewrite the stored job so the current recovery semantics win.
+    if job.misfire_grace_time != misfire_grace_time or job.coalesce is not True:
         return False
     return stored_trigger.interval == trigger.interval and tuple(job.args) == args
 
@@ -382,7 +392,9 @@ def _ensure_job(
     existing = stored.get(job_id) if stored is not None else None
     if existing is not None:
         try:
-            matches = _schedule_matches(existing, func, trigger, args)
+            matches = _schedule_matches(
+                existing, func, trigger, args, misfire_grace_time
+            )
         except Exception as exc:
             # * A stored job from an older schema version can carry a
             # * shape this code cannot compare. Replacing it is safe, so
@@ -641,6 +653,43 @@ def _reconcile_schedules(
 # ──────────────────────────── Lifecycle ──────────────────────────── #
 
 
+def _reset_scheduler_globals() -> None:
+    """Clear the lifecycle state and release the dedicated executor.
+
+    This is synchronous on purpose: no cancellation can interrupt it partway
+    through, so a second cancellation during shutdown cannot leave a stale
+    task reference or a live worker thread for the next ``start()``.
+    """
+    global _sched_task, _sched_ready, _sched_stop, _sched_error
+    _sched_task = None
+    _sched_ready = None
+    _sched_stop = None
+    _sched_error = None
+    _release_scheduler_executor()
+
+
+async def _unwind_scheduler_task(task: asyncio.Task[Any] | None) -> None:
+    """Cancel a scheduler task and collect its outcome despite a new cancel.
+
+    The unwind is shielded: a second cancellation of the caller must not
+    abandon the join and skip the global reset that follows it.
+    """
+    if task is None or task.done():
+        return
+    task.cancel()
+    try:
+        await asyncio.shield(
+            asyncio.wait_for(
+                asyncio.gather(task, return_exceptions=True),
+                timeout=2.0,
+            )
+        )
+    except TimeoutError:
+        log.warning("APScheduler task ignored cancellation during unwind.")
+    except asyncio.CancelledError:
+        log.debug("Cancellation arrived during APScheduler unwind.")
+
+
 async def start(
     database_url: str,
     *,
@@ -687,17 +736,10 @@ async def start(
     try:
         await asyncio.wait_for(_sched_ready.wait(), timeout=_STARTUP_TIMEOUT_S)
     except asyncio.CancelledError:
-        # * Shutdown raced startup: cancel the background task, wait for it
-        # * to unwind, clear the globals, then propagate so the next start()
-        # * sees clean state instead of a leaked half-started scheduler.
-        if _sched_task is not None and not _sched_task.done():
-            _sched_task.cancel()
-            await asyncio.gather(_sched_task, return_exceptions=True)
-        _sched_task = None
-        _sched_ready = None
-        _sched_stop = None
-        _sched_error = None
-        _release_scheduler_executor()
+        # * Shutdown raced startup: unwind and clear the globals so the next
+        # * start() sees clean state instead of a half-started scheduler.
+        await _unwind_scheduler_task(_sched_task)
+        _reset_scheduler_globals()
         raise
     except TimeoutError:
         # * The background task did not signal readiness within the grace
@@ -708,30 +750,11 @@ async def start(
         _sched_error = TimeoutError(
             f"APScheduler did not become ready within {_STARTUP_TIMEOUT_S:.0f}s."
         )
-        if _sched_task is not None and not _sched_task.done():
-            _sched_task.cancel()
-            try:
-                await asyncio.wait_for(
-                    asyncio.gather(_sched_task, return_exceptions=True),
-                    timeout=2.0,
-                )
-            except TimeoutError:
-                log.warning("APScheduler startup task ignored cancellation.")
+        await _unwind_scheduler_task(_sched_task)
     if _sched_error is not None:
         startup_error = _sched_error
-        if _sched_task is not None:
-            try:
-                await asyncio.wait_for(
-                    asyncio.gather(_sched_task, return_exceptions=True),
-                    timeout=2.0,
-                )
-            except TimeoutError:
-                log.warning("APScheduler startup task ignored cancellation.")
-        _sched_task = None
-        _sched_ready = None
-        _sched_stop = None
-        _sched_error = None
-        _release_scheduler_executor()
+        await _unwind_scheduler_task(_sched_task)
+        _reset_scheduler_globals()
         raise RuntimeError("APScheduler failed to start.") from startup_error
     log.info("APScheduler ready (SQLAlchemyJobStore).")
 
@@ -742,24 +765,17 @@ async def stop() -> None:
     Sets the stop event so the background task can exit cleanly.
     Safe to call even if :func:`start` was never called.
     """
-    global _sched_task, _sched_ready, _sched_stop, _sched_error, _scheduler_executor
+    global _sched_task, _sched_stop
     if _sched_stop is not None:
         _sched_stop.set()
     if _sched_task is not None:
         try:
             await asyncio.wait_for(_sched_task, timeout=_STOP_TIMEOUT_S)
         except asyncio.CancelledError:
-            # * Cancellation of stop() itself must still clear the globals;
-            # * gather retrieves the task exception so the next start() does
-            # * not race a dying task, then propagate.
-            if _sched_task is not None and not _sched_task.done():
-                _sched_task.cancel()
-                await asyncio.gather(_sched_task, return_exceptions=True)
-            _sched_task = None
-            _sched_ready = None
-            _sched_stop = None
-            _sched_error = None
-            _release_scheduler_executor()
+            # * A second cancellation must not abandon the unwind and leave
+            # * a live task for the next start().
+            await _unwind_scheduler_task(_sched_task)
+            _reset_scheduler_globals()
             raise
         except TimeoutError:
             log.warning(
@@ -769,27 +785,10 @@ async def stop() -> None:
             # * A stuck task left running would own a second live scheduler
             # * next start(): cancel it so shutdown never orphans execution.
             # * wait_for already gave up awaiting; cancel only signals.
-            if not _sched_task.done():
-                _sched_task.cancel()
-                # * Best-effort unwind so task exceptions are retrieved and
-                # * the next start() does not race a dying task. Bounded:
-                # * a task that ignores cancellation is left to the loop.
-                try:
-                    await asyncio.wait_for(
-                        asyncio.gather(_sched_task, return_exceptions=True),
-                        timeout=2.0,
-                    )
-                except TimeoutError:
-                    log.warning("APScheduler stuck task ignored cancellation.")
+            await _unwind_scheduler_task(_sched_task)
         except Exception as exc:
             log.warning("APScheduler background task failed during stop: %s", exc)
-    _sched_task = None
-    _sched_ready = None
-    _sched_stop = None
-    _sched_error = None
-    # * The dedicated worker owns a thread and the blocking job-store engine.
-    # * Leaving it alive across a stop/start cycle leaks both into the next run.
-    _release_scheduler_executor()
+    _reset_scheduler_globals()
     log.info("APScheduler stopped.")
 
 

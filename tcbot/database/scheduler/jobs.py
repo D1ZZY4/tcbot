@@ -12,12 +12,14 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import text
 
+from tcbot import cfg
 from tcbot.database.base import chat_members
 from tcbot.database.cache import (
     effective_role_cache,
     user_locale_cache,
     user_mention_cache,
 )
+from tcbot.database.connection_options import advisory_scope
 from tcbot.database.engine import run_transaction
 from tcbot.database.queues_db import expire_stale_requests
 from tcbot.utils.dispatch import throw_if_cancelled
@@ -90,7 +92,18 @@ async def expire_due_decisions() -> None:
         raise RuntimeError(
             "Expiry sweep incomplete: the sweep was rolled back; see errors above."
         ) from exc
-    log.info("Expiry sweep: %s.", summary)
+    # * Invalidate after the commit: the role rows are already expired in
+    # * the database, and a cache fill racing the transaction must not
+    # * publish the old role again.
+    _invalidate_expired_roles(summary.get("expired_role_user_ids", []))
+    log.info(
+        "Expiry sweep: %s.",
+        {
+            key: value
+            for key, value in summary.items()
+            if key != "expired_role_user_ids"
+        },
+    )
 
 
 async def _expire_transaction(sess: AsyncSession) -> dict[str, Any]:
@@ -107,18 +120,31 @@ async def _expire_transaction(sess: AsyncSession) -> dict[str, Any]:
     """
     locked = await sess.scalar(
         text("SELECT pg_try_advisory_xact_lock(hashtextextended(:scope, 0))"),
-        {"scope": "tcbot:expiry"},
+        {"scope": advisory_scope(cfg.db_schema, "tcbot:expiry")},
     )
     if not locked:
         log.info("Expiry sweep skipped: another instance owns the lock.")
-        return {"skipped": True}
+        return {"skipped": True, "expired_role_user_ids": []}
     decisions = await sess.execute(
         text("SELECT expire_due_moderation_actions_and_queue_revokes()")
     )
+    # * Read the affected users inside the same transaction, before the
+    # * function flips the rows to expired. The lock makes this snapshot
+    # * exclusive across instances, so the caller can invalidate exactly
+    # * those roles once the commit lands.
+    due_roles = await sess.execute(
+        text(
+            "SELECT DISTINCT user_id FROM role_assignments "
+            "WHERE status = 'active' AND expires_at IS NOT NULL "
+            "AND expires_at <= now()"
+        )
+    )
+    expired_role_user_ids = [int(row[0]) for row in due_roles]
     roles = await sess.execute(text("SELECT expire_due_role_assignments_and_audit()"))
     return {
         "decisions": _summary_of(decisions),
         "role_assignments": _summary_of(roles),
+        "expired_role_user_ids": expired_role_user_ids,
     }
 
 
@@ -128,6 +154,17 @@ def _summary_of(result: Any) -> dict[str, Any]:
     if isinstance(payload, dict):
         return payload
     return {"count": int(payload or 0)}
+
+
+def _invalidate_expired_roles(user_ids: list[int]) -> None:
+    """Drop the cached role of every user whose timed role just expired.
+
+    Non-fresh readers would otherwise keep serving the old role for the
+    cache TTL. Authorization paths read fresh, but profile and staff panels
+    use the cache, so they must see the expiry immediately.
+    """
+    for user_id in user_ids:
+        effective_role_cache.invalidate(user_id)
 
 
 async def expire_old_warns(warn_expiry_days: int) -> None:
@@ -251,7 +288,7 @@ async def _cleanup_members(sess: AsyncSession, cutoff: Any) -> int:
     """Delete stale membership rows under a cross-instance lock."""
     locked = await sess.scalar(
         text("SELECT pg_try_advisory_xact_lock(hashtextextended(:scope, 0))"),
-        {"scope": "tcbot:cleanup:members"},
+        {"scope": advisory_scope(cfg.db_schema, "tcbot:cleanup:members")},
     )
     if not locked:
         return 0
@@ -273,7 +310,7 @@ async def _sweep_erasures(sess: AsyncSession) -> tuple[int, list[int]]:
     """
     locked = await sess.scalar(
         text("SELECT pg_try_advisory_xact_lock(hashtextextended(:scope, 0))"),
-        {"scope": "tcbot:cleanup:erasures"},
+        {"scope": advisory_scope(cfg.db_schema, "tcbot:cleanup:erasures")},
     )
     if not locked:
         return 0, []
