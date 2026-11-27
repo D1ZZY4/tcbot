@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import contextlib
+import importlib.util
 import pathlib
 
 import pytest
@@ -125,6 +126,35 @@ def test_the_schema_travels_to_the_migration_config(
 
     assert captured == ["development"]
     assert lock_schemas == ["development"]
+
+
+def test_the_head_revision_reapplies_the_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The post-rules-drop head must reinstall the current SQL objects.
+
+    Revision 0023 removed the rules tables but did not reapply the schema
+    files, so an upgraded database kept a function that still references a
+    dropped table. The forward revision is what repairs those deployments.
+    """
+    path = (
+        pathlib.Path(__file__).resolve().parents[1]
+        / "alembic/versions/0024_reapply_schema_after_rules_removal.py"
+    )
+    spec = importlib.util.spec_from_file_location("_head_revision", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    called: list[object] = []
+    bind = object()
+    monkeypatch.setattr(
+        module, "apply_schema", lambda connection: called.append(connection)
+    )
+    monkeypatch.setattr(module.op, "get_bind", lambda: bind)
+
+    module.upgrade()
+
+    assert called == [bind]
 
 
 def test_every_revision_id_fits_the_version_column() -> None:
