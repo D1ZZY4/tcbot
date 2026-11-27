@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from tcbot import __main__ as main_mod
+from tcbot import alive as alive_mod
 from tcbot import notification_worker
 from tcbot.database import mtproto as mtproto_mod
 from tcbot.database import pg_cron
@@ -46,6 +47,7 @@ def _stub_startup(
         return None
 
     async def _idle() -> None:
+        assert alive_mod._polling_active is True
         idled.append(True)
 
     monkeypatch.setattr(mtproto_mod, "client", lambda: client)
@@ -79,6 +81,7 @@ def test_a_disconnected_client_fails_the_polling_lifecycle(
         asyncio.run(main_mod._run_polling())
 
     assert idled == []
+    assert alive_mod._polling_active is False
 
 
 def test_a_connected_client_enters_the_polling_loop(
@@ -91,3 +94,4 @@ def test_a_connected_client_enters_the_polling_loop(
     asyncio.run(main_mod._run_polling())
 
     assert idled == [True]
+    assert alive_mod._polling_active is False

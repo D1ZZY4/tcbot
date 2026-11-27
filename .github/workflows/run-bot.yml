@@ -141,18 +141,18 @@ jobs:
           # * Bounded graceful stop shared by the window-end path, the
           # * self-preempt break above, and the TERM/INT trap below.
           # * uv forwards the SIGTERM to the bot child (since 0.5.x,
-          # * handled by the Kurigram client), so cancellation gets the same 60 s wait
+          # * handled by the Kurigram client), so cancellation gets the same 150 s wait
           # * as a normal window end instead of dying mid-write.
           stop_bot_gracefully() {
             if [ -n "${BOT_PID:-}" ] && kill -0 "$BOT_PID" 2>/dev/null; then
               echo "Stopping bot (PID $BOT_PID) gracefully..."
               kill "$BOT_PID" 2>/dev/null || true
-              for _ in $(seq 1 30); do
+              for _ in $(seq 1 75); do
                 kill -0 "$BOT_PID" 2>/dev/null || break
                 sleep 2
               done
               if kill -0 "$BOT_PID" 2>/dev/null; then
-                echo "::warning::Bot did not exit within 60s; leaving it for runner teardown."
+                echo "::warning::Bot did not exit within 150s; leaving it for runner teardown."
               fi
             fi
           }

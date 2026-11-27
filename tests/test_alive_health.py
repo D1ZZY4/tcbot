@@ -71,6 +71,7 @@ def _health_no_io(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(alive_mod.redis_client, "client", lambda: None)
     monkeypatch.setattr(alive_mod, "cfg", SimpleNamespace(redis_url=""))
+    monkeypatch.setattr(alive_mod, "_polling_active", True)
     monkeypatch.setattr(
         alive_mod,
         "utc_now",
@@ -87,7 +88,18 @@ def test_health_ok_when_all_closed(_health_no_io: None) -> None:
     payload, code = _call_health()
     assert payload["status"] == "ok"
     assert payload["database"] == "ok"
+    assert payload["polling"] == "ok"
     assert code == 200
+
+
+def test_health_503_when_polling_stopped(
+    _health_no_io: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(alive_mod, "_polling_active", False)
+    payload, code = _call_health()
+    assert payload["status"] == "degraded"
+    assert payload["polling"] == "error"
+    assert code == 503
 
 
 def test_health_503_when_database_circuit_open(

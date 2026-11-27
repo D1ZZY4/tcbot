@@ -315,41 +315,47 @@ async def stop() -> None:
     """
     global _heartbeat_task, _lease_owner, _client
     task, _heartbeat_task = _heartbeat_task, None
-    if task is not None and not task.done():
-        task.cancel()
-        await asyncio.gather(task, return_exceptions=True)
-    # ! CRITICAL: Disconnect before releasing the lease. A free lease with a
-    # ! still-connected client lets a rolling-restart peer claim it and reuse
-    # ! the shared auth key, which Telegram rejects as AUTH_KEY_DUPLICATED.
-    c = _client
     try:
-        if c is not None:
-            try:
-                await c.stop()
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                log.debug("MTProto stop failed (non-fatal): %s", exc)
-            finally:
-                _client = None
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
     finally:
-        # * Keep the owner id until the release is attempted. Clearing it
-        # * before the await used to strand the lease for its whole TTL when
-        # * a second cancellation interrupted shutdown.
-        owner = _lease_owner
-        if owner is not None:
-            try:
-                from tcbot.database.mtproto_store import (  # noqa: PLC0415 (same as client())
-                    PostgresStorage,
-                )
-            except ImportError:
-                pass
-            else:
-                await _release_lease_quietly(
-                    PostgresStorage(cfg.mtproto_session), owner
-                )
-            finally:
-                _lease_owner = None
+        # ! CRITICAL: Disconnect before releasing the lease. A free lease with
+        # ! a still-connected client lets a rolling-restart peer claim it and
+        # ! reuse the shared auth key, which Telegram rejects as
+        # ! AUTH_KEY_DUPLICATED. The teardown sits in finally so a second
+        # ! cancellation during the heartbeat wait cannot skip it: the caller
+        # ! already joins this coroutine with return_exceptions=True, so a
+        # ! cancel there would otherwise leave the auth key held and the
+        # ! lease stranded for its full TTL.
+        c = _client
+        try:
+            if c is not None:
+                try:
+                    await c.stop()
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    log.debug("MTProto stop failed (non-fatal): %s", exc)
+                finally:
+                    _client = None
+        finally:
+            # * Keep the owner id until the release is attempted. Clearing it
+            # * before the await used to strand the lease for its whole TTL.
+            owner = _lease_owner
+            if owner is not None:
+                try:
+                    from tcbot.database.mtproto_store import (  # noqa: PLC0415
+                        PostgresStorage,
+                    )
+                except ImportError:
+                    pass
+                else:
+                    await _release_lease_quietly(
+                        PostgresStorage(cfg.mtproto_session), owner
+                    )
+                finally:
+                    _lease_owner = None
 
 
 def is_auth_dead() -> bool:

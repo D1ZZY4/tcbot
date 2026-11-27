@@ -36,6 +36,18 @@ log = get_logger(__name__)
 # ───────────────────────── Flask App Setup ──────────────────────── #
 _app = Flask(__name__)
 
+# * Set by the polling lifecycle around idle(). A keep-alive thread can keep
+# * answering while the client has already stopped consuming updates, so the
+# * health verdict needs a direct signal instead of inferring liveness from
+# * the database and the circuit breakers.
+_polling_active: bool = False
+
+
+def set_polling_active(*, active: bool) -> None:
+    """Record whether the Kurigram polling loop is currently running."""
+    global _polling_active
+    _polling_active = active
+
 
 # ──────────────────── Optional Prometheus metrics ───────────────── #
 # * prometheus-client is optional (the observability extra); the endpoint
@@ -76,6 +88,7 @@ class _HealthPayload(msgspec.Struct):
     scheduler: str
     circuit_telegram: str
     circuit_database: str
+    polling: str
     ts: str
 
 
@@ -115,6 +128,7 @@ def health() -> tuple[str, int, dict[str, str]]:
         )
 
     tg_state = _cb.telegram.peek_state()
+    polling_ok = _polling_active
 
     # * Both circuits must be fully CLOSED for their subsystem to count
     # * healthy: HALF_OPEN (recovery probe pending or timed out) is degraded
@@ -126,6 +140,7 @@ def health() -> tuple[str, int, dict[str, str]]:
         if (
             database_ok
             and scheduler_ok
+            and polling_ok
             and tg_state is CircuitState.CLOSED
             and db_state is CircuitState.CLOSED
         )
@@ -138,6 +153,7 @@ def health() -> tuple[str, int, dict[str, str]]:
         scheduler="ok" if scheduler_ok else "error",
         circuit_telegram=tg_state.value,
         circuit_database=db_state.value,
+        polling="ok" if polling_ok else "error",
         ts=utc_now().isoformat(timespec="seconds"),
     )
     code = 200 if overall == "ok" else 503

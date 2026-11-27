@@ -24,7 +24,7 @@ from pyrogram.types import CallbackQuery, ChatJoinRequest, ChatMemberUpdated, Me
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.alive import start_keepalive
+from tcbot.alive import set_polling_active, start_keepalive
 from tcbot.database import engine as db_engine
 from tcbot.database import mtproto as mtproto_mod
 from tcbot.database import pg_cron, redis_client
@@ -396,6 +396,17 @@ def register_handlers(client: Client) -> None:
 async def _shutdown_subsystems() -> None:
     """Stop background work and close every external client."""
     try:
+        # ! CRITICAL: release the shared MTProto lease before the long drains.
+        # * The runner's graceful-stop window can expire during a proof flush;
+        # * a lease released afterwards strands the session for its full TTL
+        # * and makes the successor wait before it can poll. Client disposal
+        # * still happens on every exit path via the final block below.
+        try:
+            await mtproto_mod.stop()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.warning("MTProto shutdown failed (non-fatal): %s", exc)
         await shutdown_dispatcher()
         await sched_mod.stop()
         await _asyncio_report_tasks.drain()
@@ -411,17 +422,11 @@ async def _shutdown_subsystems() -> None:
         # ! skip client disposal entirely. Run teardown on every exit path,
         # ! and close the database last even when disposal itself is cancelled.
         try:
-            shutdown_results = await asyncio.gather(
-                redis_client.close(),
-                mtproto_mod.stop(),
-                return_exceptions=True,
-            )
-            for result in shutdown_results:
-                if isinstance(result, BaseException) and not isinstance(
-                    result, asyncio.CancelledError
-                ):
-                    log.warning("Shutdown step failed (non-fatal): %s", result)
-            throw_if_cancelled(shutdown_results)
+            await redis_client.close()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.warning("Redis shutdown failed (non-fatal): %s", exc)
         finally:
             await close_database()
 
@@ -452,11 +457,15 @@ async def _run_polling() -> None:
                 "refusing to exit successfully without receiving updates."
             )
         log.info("Bot initialised. Running Kurigram polling loop...")
+        set_polling_active(active=True)
         await idle()
     except asyncio.CancelledError:
         log.info("Polling cancelled.")
         raise
     finally:
+        # * Clear before any await so a cancellation during shutdown cannot
+        # * leave /health green after polling has already stopped.
+        set_polling_active(active=False)
         await _shutdown_subsystems()
         log.info("Bot shutdown complete.")
 

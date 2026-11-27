@@ -49,7 +49,7 @@ def test_database_closes_after_a_cancelled_shutdown_step(
     closed: list[bool] = []
 
     async def _cancelled_close() -> Any:
-        return asyncio.CancelledError()
+        raise asyncio.CancelledError()
 
     async def _close_database() -> None:
         closed.append(True)
@@ -94,7 +94,7 @@ def test_clients_close_when_an_early_drain_is_cancelled(
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(main_mod._shutdown_subsystems())
 
-    assert closed == ["redis", "mtproto", "database"]
+    assert closed == ["mtproto", "redis", "database"]
 
 
 def test_database_closes_when_disposal_task_is_cancelled(

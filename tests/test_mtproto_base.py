@@ -239,6 +239,55 @@ def test_stop_clears_client(monkeypatch: pytest.MonkeyPatch) -> None:
     assert mtproto._client is None
 
 
+async def test_stop_releases_lease_when_cancelled_during_heartbeat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A second cancellation cannot skip disconnect or release the lease.
+
+    Shutdown joins stop() with return_exceptions=True, so a cancel landing on
+    the heartbeat wait used to bypass the CRITICAL teardown entirely and let
+    a rolling-restart peer reuse the still-connected auth key.
+    """
+    fake = _FakeClient()
+    monkeypatch.setattr(mtproto, "_client", fake)
+    monkeypatch.setattr(mtproto, "_lease_owner", "owner-1")
+    released: list[str] = []
+    ordered: list[bool] = []
+
+    async def _release(_storage: Any, owner: str) -> None:
+        # * The client must already be disconnected when the lease is freed.
+        ordered.append(fake.stopped)
+        released.append(owner)
+
+    monkeypatch.setattr(mtproto, "_release_lease_quietly", _release)
+
+    cancelled = asyncio.Event()
+
+    async def _heartbeat() -> None:
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            # * Hold the gather open so the outer cancellation lands inside it.
+            cancelled.set()
+            await asyncio.sleep(3600)
+
+    task = asyncio.create_task(_heartbeat())
+    await asyncio.sleep(0)
+    monkeypatch.setattr(mtproto, "_heartbeat_task", task)
+
+    stopper = asyncio.create_task(mtproto.stop())
+    await asyncio.wait_for(cancelled.wait(), timeout=1)
+    stopper.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await stopper
+
+    assert fake.stopped is True
+    assert mtproto._client is None
+    assert released == ["owner-1"]
+    assert ordered == [True]
+    assert mtproto._lease_owner is None
+
+
 def test_resolve_none_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
     _with_creds(monkeypatch, 0, "")
 
