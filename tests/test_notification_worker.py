@@ -627,3 +627,49 @@ def test_cancelling_a_batch_returns_unprocessed_claims(
             "expected_next_retry_at": "second-deadline",
         }
     ]
+
+
+def test_a_second_cancellation_still_returns_the_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A shutdown that cancels twice must not charge an edit that never ran."""
+    released: list[dict[str, Any]] = []
+    load_started = asyncio.Event()
+    release_started = asyncio.Event()
+    _wire(monkeypatch)
+
+    async def _blocking_load(task_id: int) -> dict[str, object]:
+        load_started.set()
+        await asyncio.Event().wait()
+        raise AssertionError("the load should have been cancelled")
+
+    async def _release(task_id: int, **kwargs: Any) -> None:
+        release_started.set()
+        await asyncio.sleep(0)
+        released.append({"task_id": task_id, **kwargs})
+
+    monkeypatch.setattr(db.notifications_db, "load_task_action", _blocking_load)
+    monkeypatch.setattr(db.notifications_db, "release_claim", _release)
+
+    async def _scenario() -> None:
+        running = asyncio.create_task(
+            notification_worker.run_once(_Bot())  # type: ignore[arg-type]
+        )
+        await asyncio.wait_for(load_started.wait(), timeout=1)
+        running.cancel()
+        await asyncio.wait_for(release_started.wait(), timeout=1)
+        running.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await running
+        await asyncio.sleep(0)
+
+    asyncio.run(_scenario())
+
+    assert released == [
+        {
+            "task_id": 1,
+            "expected_attempts": 1,
+            "expected_message_id": 900,
+            "expected_next_retry_at": "claimed-deadline",
+        }
+    ]

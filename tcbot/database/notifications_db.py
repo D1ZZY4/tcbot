@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database.base import moderation_notification_tasks
@@ -215,7 +215,18 @@ async def complete_task(
     """
     if state not in ("pending", "sent", "failed", "skipped"):
         raise ValueError(f"Refusing unknown notification state {state!r}")
-    next_retry_at = utc_now() + retry_after if retry_after is not None else None
+    # * The claim reserves the retry window with the PostgreSQL clock. Use the
+    # * same clock here: a host clock lead would make a retry due before the
+    # * deadline the claim recorded, and a lag would delay a decided card.
+    values: dict[str, Any] = {
+        "state": state,
+        "last_error": error,
+        "updated_at": func.now(),
+        "next_retry_at": None,
+    }
+    if retry_after is not None:
+        seconds = max(1, int(retry_after.total_seconds()))
+        values["next_retry_at"] = func.now() + text(f"make_interval(secs => {seconds})")
     stmt = moderation_notification_tasks.update().where(
         moderation_notification_tasks.c.id == task_id
     )
@@ -228,13 +239,4 @@ async def complete_task(
         stmt = stmt.where(
             moderation_notification_tasks.c.message_id == expected_message_id
         )
-    await run_transaction(
-        lambda sess: sess.execute(
-            stmt.values(
-                state=state,
-                last_error=error,
-                next_retry_at=next_retry_at,
-                updated_at=utc_now(),
-            )
-        )
-    )
+    await run_transaction(lambda sess: sess.execute(stmt.values(**values)))

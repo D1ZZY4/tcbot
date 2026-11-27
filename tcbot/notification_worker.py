@@ -384,7 +384,12 @@ async def _process_task(
         # * card the operator already sees as closed. A probe reserved by
         # * run_once stays owned by run_once; only a probe taken here is released.
         if not edit_confirmed:
-            await _release_claim()
-            if probe_acquired:
-                _cb.telegram.release_probe()
+            # * Shield the compensating write: a second cancellation during a
+            # * shutdown would otherwise abort the claim release, leave the
+            # * attempt charged without an edit, and strand this task's probe.
+            try:
+                await asyncio.shield(_release_claim())
+            finally:
+                if probe_acquired:
+                    _cb.telegram.release_probe()
         raise
