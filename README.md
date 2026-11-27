@@ -92,7 +92,7 @@ Only six values are required. Everything else has a working default.
 | Variable | Required | Description |
 |---|---|---|
 | `MAIN_GROUP` | Usually | Main community group or forum (negative chat ID). |
-| `MAIN_CHANNEL` | For rules | Main community channel (negative chat ID); the publication target for rules. |
+| `MAIN_CHANNEL` | No | Main community channel (negative chat ID); source of the community menu link and a deployment-owned destination. |
 | `INFRA_CHAT_IDS` | No | Extra deployment-owned chat IDs refused by the connect paths; list or CSV, negative IDs only. |
 
 ### Logs, proofs, and appeals

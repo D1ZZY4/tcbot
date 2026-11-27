@@ -20,8 +20,8 @@ The authoritative state is the schema selected by `DB_SCHEMA`:
 | `test` | No | Rebuilt and emptied by the test suite. |
 
 Back up the whole schema, including reference data from `seed.sql` objects,
-role assignments, moderation history, enforcement ledger tables, rules
-publications, and `alembic_version`. The APScheduler job store
+role assignments, moderation history, enforcement ledger tables, and
+`alembic_version`. The APScheduler job store
 (`apscheduler_jobs`) is also in the schema; restoring it is optional, because
 the bot reconciles schedules at startup. A restored row is reusable only while
 its stored callable reference still imports; an obsolete reference is dropped
@@ -89,7 +89,7 @@ line at all.
 For a plain SQL dump, apply it with `psql` against the target database. After
 the restore, query the `alembic_version` table and compare its value with the
 newest revision in `alembic/versions/` (currently
-`0022_forward_guarded_schema`). The bot applies any pending revisions at
+`0024_reapply_schema`). The bot applies any pending revisions at
 startup, so a restored database behind the code head is upgraded automatically.
 
 ## Post-restore checks

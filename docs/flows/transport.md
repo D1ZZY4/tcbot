@@ -1,8 +1,8 @@
 # Rich message transport
 
 This page documents the rich-only message path: how every user-facing payload
-is assembled, sent, edited, answered, and logged, and exactly when an inline
-keyboard is kept instead of being converted to rich buttons. Callback names and
+is assembled, sent, edited, answered, and logged, and exactly when an unconvertible
+keyboard is dropped instead of being converted to rich buttons. Callback names and
 state constants are in [reference/callbacks.md](../reference/callbacks.md).
 
 ## Payload shape
@@ -17,20 +17,19 @@ explicit block objects.
 
 `_message_with_buttons(message, reply_markup)` converts the markup with
 `buttons_from_markup()` and, when rows exist and `message["html"]` is a string,
-appends the rows to the HTML with a newline. It returns
-`(payload, fallback_markup)`: rows embedded means the fallback is `None`; a
-non-empty keyboard that could not be converted is kept; an empty markup is
-dropped so editors can still clear an old keyboard.
-The send and edit helpers always embed convertible buttons as rich markup.
+appends the rows to the HTML with a newline. It returns the payload and drops
+any keyboard it cannot express as rich buttons, logging an ERROR. An empty
+markup is also dropped so editors can still clear an old keyboard.
+The send and edit helpers always embed convertible buttons as rich markup; they
+never attach a native keyboard to a rich payload.
 Conversion is all-or-nothing for real cells: one unmappable cell, a row longer
-than eight buttons, or an overlong callback keeps the whole keyboard as native
-inline markup instead of embedding any rich button rows. Empty navigation rows
-from paged keyboards are dropped losslessly before that decision. Each rich button carries exactly one
+than eight buttons, or an overlong callback drops the whole keyboard instead of
+embedding any rich button rows. Empty navigation rows from paged keyboards are
+dropped losslessly before that decision. Each rich button carries exactly one
 action, with callback data limited to 1-64 bytes and copy text to 1-256
 characters, matching Kurigram's `RichMessageButton.write()`. An unconvertible
-keyboard stays inline on the same `InputRichMessage`; this is a button
-representation on the rich message, never a second transport or a plain-text
-fallback.
+keyboard is not sent at all; this is a deliberate error, never a second
+transport or a plain-text fallback.
 
 | Field | Set by | Meaning |
 |---|---|---|
@@ -40,7 +39,6 @@ fallback.
 | `media` | `html_message(..., media=[...])` | Embedded media referenced by `tg://photo|video|document|audio?id=` links. |
 | `blocks` | `blocks_message(blocks)` | Explicit block payload; buttons are not embedded into it. |
 | `rich_message` | `send_rich`, `edit_rich` | API key carrying the payload above. |
-| `reply_markup` | `send_rich`, `edit_rich` | Inline keyboard retained on the same rich message when conversion did not embed it. |
 
 ## Send and reply
 
@@ -49,9 +47,9 @@ flowchart TD
     CALL[reply_rich or send_rich] --> BUILT[html_message payload]
     BUILT --> CONVERT{buttons_from_markup returns rows and html is a string?}
     CONVERT -->|yes| EMBED[Append tg-button-row markup to html]
-    CONVERT -->|no| INLINE[Keep reply_markup as inline keyboard]
+    CONVERT -->|no| DROP[Drop keyboard and log ERROR]
     EMBED --> API[Client.send_rich_message with InputRichMessage]
-    INLINE --> API
+    DROP --> API
     API --> MSG[Message returned by send_rich]
     REPLY[reply_rich] --> SEND[msg.reply_rich with InputRichMessage]
     SEND -->|exception| LOG[log.debug or log.warning by log_label]
@@ -114,24 +112,24 @@ broadcasts; it has no parse-mode variant and no alternate text transport. See
 
 `modules/helper/rich/button.py` owns `buttons_from_markup(reply_markup)` and
 `button_from_cell(cell)`. `buttons_from_markup` is all-or-nothing: one unmappable
-cell makes the whole keyboard stay inline. `_markup_dict()` accepts a dict directly
+cell makes the whole keyboard drop. `_markup_dict()` accepts a dict directly
 or reads `inline_keyboard` from a Kurigram markup object and serializes its cells.
 
 ```mermaid
 flowchart TD
     MARKUP[reply_markup] --> DICT[_markup_dict]
     DICT --> CELLS{inline_keyboard list present and non-empty?}
-    CELLS -->|no| INLINE[Keep inline keyboard]
+    CELLS -->|no| DROP[Drop keyboard and log ERROR]
     CELLS -->|yes| EACH[For each cell: button_from_cell]
     EACH --> TEXT{text is a string?}
-    TEXT -->|no| INLINE
+    TEXT -->|no| DROP
     TEXT -->|yes| DATA{callback_data present?}
     DATA -->|yes| SIZE{len data UTF-8 is at most 64 bytes?}
-    SIZE -->|no| INLINE
+    SIZE -->|no| DROP
     SIZE -->|yes| RICH[tg-button type callback_data]
     DATA -->|no| URL{url present?}
     URL -->|yes| RICHURL[tg-button type url]
-    URL -->|no| INLINE
+    URL -->|no| DROP
     RICH --> ROW[button_row with align left center or right]
     RICHURL --> ROW
     ROW --> HTML[Embed rows in html]
@@ -149,13 +147,13 @@ those Kurigram cell types, so normal keyboards ship as rich buttons.
 
 | Condition | Result |
 |---|---|
-| `callback_data` longer than 64 bytes (`_CALLBACK_MAX_BYTES = 64`) | Whole keyboard stays inline. |
+| `callback_data` longer than 64 bytes (`_CALLBACK_MAX_BYTES = 64`) | Whole keyboard is dropped with an ERROR. |
 | `web_app`, `login_url`, `switch_inline_query*`, `copy_text`, or `disabled` cell | Converted to the matching rich button type. |
-| Cell without string `text` | `button_from_cell()` returns `None`; whole keyboard stays inline. |
-| Cell with an action that is not one of the mapped types | `button_from_cell()` returns `None`; whole keyboard stays inline. |
+| Cell without string `text` | `button_from_cell()` returns `None`; whole keyboard is dropped. |
+| Cell with an action that is not one of the mapped types | `button_from_cell()` returns `None`; whole keyboard is dropped. |
 | Cell with no action at all | Rendered as a disabled rich button. |
 | Unsupported Kurigram style value | Style is dropped to `None`; the button still converts. |
-| Payload has `blocks` rather than `html` | `_message_with_buttons()` does not embed; `reply_markup` stays inline. |
+| Payload has `blocks` rather than `html` | `_message_with_buttons()` does not embed; no buttons are attached. |
 | No markup at all | No buttons in either representation. |
 
 A button is inline rich text, so it can also live inside a table cell:

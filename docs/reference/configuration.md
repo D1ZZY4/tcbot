@@ -29,8 +29,8 @@ fail at load time with an actionable message. The template is
 | `LOG_LEVEL` | `INFO` | `NOTSET`, `DEBUG`, `INFO`, `WARNING`, `WARN`, `ERROR`, `CRITICAL`, `FATAL`. |
 | `SENTRY_DSN` | empty | Opt-in error monitoring with the observability extra. |
 | `KURIGRAM_WORKERS` | `0` (automatic) | Dispatcher worker count. Automatic sizing uses CPU count and the database pool, capped at 64; it improves throughput under load, not single-update latency. |
-| `MODULES_LOAD` | empty | Comma-separated allowlist of module names. |
-| `MODULES_NO_LOAD` | empty | Comma-separated denylist of module names. |
+| `MODULES_LOAD` | empty | Python-style list or tuple, or comma-separated allowlist of module names. |
+| `MODULES_NO_LOAD` | empty | Python-style list or tuple, or comma-separated denylist of module names. |
 
 ## Destinations
 
@@ -66,7 +66,7 @@ remain.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `ALBUM_DEBOUNCE_SECONDS` | `4` | Proof silence window, minimum 1. A 60-second hard cap always applies. |
+| `ALBUM_DEBOUNCE_SECONDS` | `4` | Proof silence window, minimum 1. Proof collection is independently capped at 60 seconds, so a larger value still flushes within that window. |
 | `WARN_LIMIT` | `3` | Per-group warn threshold, minimum 1. |
 | `WARN_EXPIRY_DAYS` | `0` | Days after which a warning stops counting toward the threshold; 0 disables expiry. Warning history is kept and never deleted. |
 | `FED_WARN_LIMIT` | `0` | Federation-wide threshold; 0 disables it. |

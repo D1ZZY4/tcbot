@@ -25,9 +25,9 @@ A button is built as a Kurigram `InlineKeyboardButton` and converted to a rich
 | `switch_inline_query_chosen_chat` | `switch_inline_query_chosen_chat` | With optional chat-type flags. |
 | `disabled` | `disabled` | Inert button. |
 
-Convenience wrappers in `rich/button.py` (`callback_button`, `url_button`,
-`copy_button`, `web_app_button`, `login_button`, `switch_button`,
-`switch_current_button`, `switch_chosen_button`, `disabled_button`) are thin
+Convenience wrappers in `rich/button.py` (`url_button`, `copy_button`,
+`web_app_button`, `login_button`, `switch_button`, `switch_current_button`,
+`switch_chosen_button`, `disabled_button`) are thin
 aliases over `button()`. `mention_button()` is the exception: it emits a URL
 button for a shape-valid username and escaped plain text otherwise.
 

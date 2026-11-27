@@ -58,7 +58,7 @@ Commonly configured values:
 | `REDIS_URL` | empty | Optional Redis L2 cache. |
 | `PG_CRON_ENABLED` | `false` | Let pg_cron own database-only jobs. |
 | `MAIN_GROUP` | unset | Primary community group id; must be negative. |
-| `MAIN_CHANNEL` | unset | Rules publication target; must be negative. |
+| `MAIN_CHANNEL` | unset | Main community channel behind the menu link; must be negative. |
 | `LOGS`, `LOGS_ERRORS`, `APPEALS` | unset | Log and appeal destinations; `chat_id/thread_id` is accepted. |
 | `ALBUM_DEBOUNCE_SECONDS` | `4` | Proof silence window, minimum 1. |
 | `WARN_LIMIT`, `WARN_EXPIRY_DAYS`, `FED_WARN_LIMIT` | `3`, `0`, `0` | Warning thresholds and expiry. |

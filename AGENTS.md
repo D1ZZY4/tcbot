@@ -96,7 +96,9 @@ and `forward_msg.py` own the send, reply, edit and forward transports. They
 build Kurigram `InputRichMessage`
 payloads, so rich HTML is rendered by the client itself; there is no parse mode
 and no MarkdownV2 fallback. Every send and edit must go through these helpers
-so inline keyboards and rich markup stay consistent.
+so rich markup stays consistent. A keyboard that cannot be expressed as rich
+buttons is dropped with an ERROR instead of being sent as a second, native
+representation.
 
 - Route new sends through `rich/send_msg.py` (`send_rich`, `send_text`) and
   `rich/reply_msg.py` (`reply_rich`, `reply_rich_result`), and edits through

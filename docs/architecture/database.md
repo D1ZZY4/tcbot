@@ -55,8 +55,7 @@ that migrations apply.
 | Identity | `telegram_users`, `telegram_chats`, `connected_chats`, `chat_members`, `join_requests` |
 | Roles and RBAC | `role_definitions`, `permission_definitions`, `role_permissions`, `role_assignments`, `promotion_requests` |
 | Settings | `community_settings`, `user_settings`, `chat_settings` |
-| Rules | `rule_sets`, `rule_set_versions`, `rule_categories`, `rule_category_content`, `rule_items`, `rule_publications`, `rule_publication_runs`, `rule_acknowledgements` |
-| Moderation | `moderation_cases`, `moderation_actions`, `moderation_evidence_uploads`, `moderation_evidence_items`, `moderation_messages`, `moderation_appeals`, `moderation_case_rules`, `moderation_notification_tasks`, `audit_events` |
+| Moderation | `moderation_cases`, `moderation_actions`, `moderation_evidence_uploads`, `moderation_evidence_items`, `moderation_messages`, `moderation_appeals`, `moderation_notification_tasks`, `audit_events` |
 | Enforcement | `moderation_enforcement_runs`, `moderation_enforcement_targets`, `moderation_enforcement_attempts` |
 | Automation and broadcast | `automation_*`, `broadcast_campaigns`, `broadcast_targets`, `broadcast_attempts` |
 | Jobs and runtime | `scheduled_jobs`, `scheduled_job_runs`, `retention_policies`, `telegram_user_erasures`, `apscheduler_jobs`, `mtproto_state` |
@@ -68,7 +67,7 @@ that migrations apply.
 
 `tcbot/database/schema/` holds the SQL deployed from files. The loader applies,
 in order, `views.sql`, the domain files under `functions/` (identity, rbac,
-rules, moderation, moderation_audit, automation, scheduler, maintenance,
+moderation, moderation_audit, automation, scheduler, maintenance,
 mtproto), then `triggers.sql`, `policies.sql`, and `seed.sql`. All function
 files live in `functions/` and are applied through the same loader. The old
 root-level `functions.sql` no longer exists. Each file carries a
@@ -77,7 +76,8 @@ function bodies, escape strings, and nested comments.
 The seed defines role priorities (owner 100, admin 80, developer 60, moderator
 40), permissions, and other reference data.
 
-`alembic/versions/` holds numbered revisions; the current head is `0022`.
+`alembic/versions/` holds numbered revisions; the current head is
+`0024_reapply_schema`.
 `database/migrations.py` applies them at startup under an advisory lock so two
 instances cannot migrate concurrently. A schema bootstrapped from metadata but
 missing `alembic_version` is stamped at the head revision before the normal
@@ -96,7 +96,6 @@ upgrade. See [Backup and restore](../operations/backup-and-restore.md).
 | `queues_db.py` | Promotion requests and their expiry. |
 | `enforcement_ledger.py` | Durable runs, targets, attempts, and connect replay. |
 | `notifications_db.py` | Durable review-card edit outbox. |
-| `rules_db/` | Drafts, categories, items, versions, publications, and runs. |
 | `erasure_db.py` | Queued account erasures. |
 | `settings_db.py` | Per-user and community default locale preferences; group locale lives in `groups_db.py`. |
 | `pg_cron.py` | Optional pg_cron ownership of database-only jobs. |
