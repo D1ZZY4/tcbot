@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -60,3 +61,64 @@ def test_no_raw_message_transport_calls_outside_rich_owners() -> None:
             if _RAW_TRANSPORT.search(line):
                 offenders.append(f"{path}:{lineno}: {line.strip()}")
     assert not offenders, "raw message transports: " + ", ".join(offenders)
+
+
+# * The string rule above misses aliased calls and canonical rich method names.
+# * Resolve the callee of every call in the AST instead, including getattr with
+# * a constant method name.
+_DELIVERY_METHODS = frozenset(
+    {
+        "send_message",
+        "send_rich_message",
+        "reply_text",
+        "reply_rich",
+        "edit_text",
+        "edit_message_text",
+        "edit_message_reply_markup",
+        "edit_message_caption",
+        "edit_message_media",
+        "send_photo",
+        "send_video",
+        "send_document",
+        "send_animation",
+        "send_voice",
+        "send_audio",
+        "send_sticker",
+        "send_poll",
+        "send_location",
+        "send_media_group",
+        "forward",
+    }
+)
+_RICH_OWNERS = frozenset(
+    {"send_msg.py", "reply_msg.py", "edit_msg.py", "forward_msg.py"}
+)
+
+
+def _called_method(node: ast.Call) -> str | None:
+    if isinstance(node.func, ast.Attribute):
+        return node.func.attr
+    if (
+        isinstance(node.func, ast.Name)
+        and node.func.id == "getattr"
+        and len(node.args) >= 2
+        and isinstance(node.args[1], ast.Constant)
+        and isinstance(node.args[1].value, str)
+    ):
+        return node.args[1].value
+    return None
+
+
+def test_only_rich_owner_modules_call_delivery_methods() -> None:
+    offenders: list[str] = []
+    for path in sorted(_SOURCE.rglob("*.py")):
+        if path.parent.name == "rich" and path.name in _RICH_OWNERS:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            method = _called_method(node)
+            if method in _DELIVERY_METHODS:
+                offenders.append(f"{path}:{node.lineno}: {method}")
+    assert not offenders, "delivery calls outside rich owners: " + ", ".join(offenders)

@@ -112,9 +112,9 @@ def test_user_ref_uses_native_rich_mention_buttons() -> None:
         '<tg-button type="url" url="https://t.me/real_user">Name</tg-button>'
     )
     assert user_ref(0, "Anon") == "Anon"
-    assert user_ref(0, "Anon", "cached_name") == (
-        '<tg-button type="url" url="https://t.me/cached_name">Anon</tg-button>'
-    )
+    # * A pseudo-account id is never a valid profile target, even when an
+    # * observed username is available.
+    assert user_ref(0, "Anon", "cached_name") == "Anon"
 
 
 def test_mention_id_gate_rejects_every_non_user_shape() -> None:
@@ -477,6 +477,21 @@ def test_rich_edit_embeds_buttons() -> None:
     kwargs = bot.calls[0][1]
     assert "<tg-button-row>" in kwargs["rich_message"].html
     assert "reply_markup" not in kwargs
+
+
+def test_an_empty_markup_object_still_clears_the_keyboard() -> None:
+    """An explicit empty keyboard and a None markup mean the same thing."""
+    bot = _FakeBot()
+    asyncio.run(
+        rich_edit.safe_edit_message(
+            cast("Any", bot),
+            -100,
+            1,
+            "x",
+            reply_markup=InlineKeyboardMarkup([]),
+        )
+    )
+    assert bot.calls[0][1]["reply_markup"].inline_keyboard == []
 
 
 def test_rich_edit_can_clear_a_keyboard() -> None:

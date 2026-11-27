@@ -14,6 +14,7 @@ from pyrogram.types import InlineKeyboardMarkup
 from tcbot import cfg
 from tcbot.modules.helper.rich.block import (
     _input_rich,
+    _markup_has_buttons,
     _message_with_buttons,
     html_message,
 )
@@ -107,9 +108,9 @@ async def safe_edit(
     extra: dict[str, Any] = {}
     if fallback is not None:
         extra["reply_markup"] = fallback
-    elif "reply_markup" in kwargs and markup is None:
-        # * Omitting the key leaves the old keyboard; passing it as None is the
-        # * caller's explicit request to remove it.
+    elif "reply_markup" in kwargs and not _markup_has_buttons(markup):
+        # * Omitting the key leaves the old keyboard; an explicit None or empty
+        # * markup is the caller's request to remove it.
         extra["reply_markup"] = InlineKeyboardMarkup([])
     if clear_markup:
         extra["reply_markup"] = InlineKeyboardMarkup([])
@@ -140,7 +141,7 @@ async def safe_edit_cb(
     extra: dict[str, Any] = {}
     if fallback is not None:
         extra["reply_markup"] = fallback
-    elif "reply_markup" in kwargs and markup is None:
+    elif "reply_markup" in kwargs and not _markup_has_buttons(markup):
         extra["reply_markup"] = InlineKeyboardMarkup([])
     if clear_markup:
         extra["reply_markup"] = InlineKeyboardMarkup([])
@@ -175,7 +176,7 @@ async def safe_edit_message(
     extra: dict[str, Any] = {}
     if fallback is not None:
         extra["reply_markup"] = fallback
-    elif "reply_markup" in kwargs and markup is None:
+    elif "reply_markup" in kwargs and not _markup_has_buttons(markup):
         extra["reply_markup"] = InlineKeyboardMarkup([])
     if clear_markup:
         extra["reply_markup"] = InlineKeyboardMarkup([])

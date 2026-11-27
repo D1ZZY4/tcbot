@@ -218,7 +218,7 @@ def mention_button(
     # * cannot prove existence, and stored ban/role rows can outlive an
     # * account, so only a verified username becomes a button. Every other
     # * mention stays readable text rather than a message-breaking button.
-    if is_valid_username(username):
+    if is_valid_username(username) and is_mentionable_user_id(user_id):
         return url_button(label, f"https://t.me/{username}", style=style)
     return esc(label)
 

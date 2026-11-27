@@ -442,6 +442,8 @@ def t(
     template = data.get(canonical, {}).get(key)
     if template is None:
         template = data.get(DEFAULT_LOCALE, {}).get(key)
+    if template is not None and not isinstance(template, str):
+        raise I18nError(f"i18n key {key!r} must be a string")
     if template is None:
         log.error("i18n missing key %r (locale %r)", key, locale)
         return f"[{key}]" if plain else esc(f"[{key}]")

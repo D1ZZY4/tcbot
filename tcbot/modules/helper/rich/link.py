@@ -16,6 +16,7 @@ import time
 
 from pyrogram import Client
 
+from tcbot.modules.helper.rich.button import is_valid_username
 from tcbot.modules.helper.rich.style import esc
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
@@ -116,9 +117,12 @@ async def resolve(bot: Client, chat_id: int) -> str | None:
             log.debug("Community link lookup failed for %d: %s", chat_id, exc)
             return None
         username = getattr(chat, "username", None)
+        # * The single username validator owns this URL too. A malformed
+        # * lookup response must fall through to an invite link, not produce
+        # * a broken or attacker-shaped href.
         value = (
             f"https://t.me/{username}"
-            if username
+            if is_valid_username(username)
             else getattr(chat, "invite_link", None)
         )
         ttl = _CACHE_TTL_S

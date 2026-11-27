@@ -106,7 +106,7 @@ def test_a_refused_invite_export_still_omits_the_button() -> None:
 
 
 def test_a_cached_link_skips_the_second_telegram_lookup() -> None:
-    bot = _bot(SimpleNamespace(username="tcf", invite_link=None))
+    bot = _bot(SimpleNamespace(username="tcf_chat", invite_link=None))
 
     assert asyncio.run(community_links.resolve(cast("Any", bot), -500)) is not None
     assert asyncio.run(community_links.resolve(cast("Any", bot), -500)) is not None
@@ -114,7 +114,7 @@ def test_a_cached_link_skips_the_second_telegram_lookup() -> None:
 
 
 def test_forget_drops_one_cached_link() -> None:
-    bot = _bot(SimpleNamespace(username="tcf", invite_link=None))
+    bot = _bot(SimpleNamespace(username="tcf_chat", invite_link=None))
 
     asyncio.run(community_links.resolve(cast("Any", bot), -600))
     community_links.forget(-600)
@@ -124,7 +124,7 @@ def test_forget_drops_one_cached_link() -> None:
 
 
 def test_zero_chat_id_never_calls_telegram() -> None:
-    bot = _bot(SimpleNamespace(username="tcf", invite_link=None))
+    bot = _bot(SimpleNamespace(username="tcf_chat", invite_link=None))
 
     assert asyncio.run(community_links.resolve(cast("Any", bot), 0)) is None
     assert bot.calls == []  # type: ignore[attr-defined]
