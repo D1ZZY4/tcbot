@@ -89,9 +89,11 @@ Telegram updates pass through a command or callback filter and tier decorators,
 then a handler that delegates persistence to `tcbot/database/` helpers and
 multi-step work to a domain-named pipeline module, and a rich-message reply.
 Only decorated handlers are throttled; there is no global rate limiter.
-Decisions commit to PostgreSQL before any Telegram call. Federation-wide Telegram
-work goes through the bounded `fan_out()` dispatcher and the Telegram circuit
-breaker; unfinished per-group deliveries are retried by the enforcement worker.
+Proof media is uploaded to the configured evidence destination before the
+decision is filed; federation-wide enforcement fan-out happens after the decision
+commits to PostgreSQL. Telegram work goes through the bounded `fan_out()`
+dispatcher and the Telegram circuit breaker; unfinished per-group deliveries are
+retried by the enforcement worker.
 
 ## Ownership rules
 

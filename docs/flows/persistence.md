@@ -14,7 +14,12 @@ through the libpq `search_path`. The project uses three schemas and no fourth.
 |---|---|---|
 | `public` | The deployment | Default schema; `DB_SCHEMA` defaults to it. |
 | `test` | Integration tests | Built and emptied by `tests/postgres_support.py`; never holds deployment data. |
-| `development` | A developer | Used by operator scripts and selected by `DB_SCHEMA=development`. |
+| `development` | A developer | A developer workspace selected by `DB_SCHEMA=development`; operator scripts leave it untouched. |
+
+Operator scripts do not use any of the three schemas. Each creates and drops its
+own disposable `tcbot_*` schema (`tcbot_schema_check`, `tcbot_migration_check`,
+`tcbot_guard_probe`), so a developer's `development` data is never rebuilt by a
+check.
 
 `connection_options.schema_options()` pins `-c search_path=<DB_SCHEMA> -c timezone=UTC`
 on every engine, including the migration connection and the APScheduler job
@@ -29,7 +34,7 @@ flowchart TD
     TX --> C[Commit or rollback as one unit]
     TX --> SP[search_path from DB_SCHEMA]
     SP --> PUB[(public: deployment)]
-    SP --> DEV[(development: operator)]
+    SP --> DEV[(development: developer)]
     SP --> TST[(test: integration tests)]
 ```
 
@@ -221,7 +226,8 @@ instead of closed. See [Appeals](appeals.md).
 
 APScheduler 3.11.3 runs an `AsyncIOScheduler` with a `SQLAlchemyJobStore` table
 `apscheduler_jobs` in the configured schema. Schedules are reconciled on startup
-by comparing stored jobs once in memory, and UTC is explicit. The runtime passes
+by comparing stored jobs in memory with a bulk read, then sweeping unknown ids
+with a second read, and UTC is explicit. The runtime passes
 the enforcement and notification worker callables into the scheduler, so the
 storage layer never imports Telegram delivery modules.
 
@@ -237,10 +243,12 @@ storage layer never imports Telegram delivery modules.
 
 Retired schedule IDs removed on every startup are `tcbot.warn_expiry_daily`,
 `tcbot.db_cleanup_weekly`, and `tcbot.enforcement_sync`. A persisted row whose
-callable path no longer imports is dropped by APScheduler before reconciliation;
-the current schedules are then registered from the source modules. Upgrading an
-old job store therefore recreates the enforcement schedule with the current
-reference, and its fire time restarts from that boot.
+callable path no longer imports is dropped by APScheduler before reconciliation.
+After registration a second bulk read removes every stored id outside the known
+catalogue, so a resolvable legacy job cannot keep firing forever, and a transient
+removal refusal is retried before the boot reports ready. Upgrading an old job
+store therefore recreates the enforcement schedule with the current reference,
+and its fire time restarts from that boot.
 
 pg_cron is opt-in through `PG_CRON_ENABLED` and only used when the extension
 exists. Its job names match the `scheduled_jobs` registry keys.

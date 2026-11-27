@@ -1,10 +1,11 @@
 # Buttons
 
 This page is the reference for every inline keyboard builder in TCF Bot. All
-builders live in `tcbot/modules/helper/buttons/` and are re-exported by the
-package `__init__.py`, so existing dotted imports keep working. Exact callback
-payloads and `WAITING_*` states are in [callbacks.md](callbacks.md); how the
-messages that carry these keyboards are rendered is in
+builders live in `tcbot/modules/helper/buttons/`. Most are re-exported by the
+package `__init__.py`, so existing dotted imports keep working; builders in
+`common.py` and `rules.py` are reached through their own submodules. Exact
+callback payloads and `WAITING_*` states are in [callbacks.md](callbacks.md);
+how the messages that carry these keyboards are rendered is in
 [Transport](../flows/transport.md).
 
 ## Rendering contract
@@ -85,7 +86,7 @@ both catalogs so the same action looks the same in every locale.
 | `↷` | defer | Skip |
 | `🗩` | respond to a decision | Appeal, Submit Appeal, View Appeal |
 | `↝` / `🖈` | open elsewhere / pinned evidence | View Log, Open in PM, community links; View Proof, Proof id |
-| `⤎` + `🗶` | leave a panel | Back (green) and Close (red) on read-only menus |
+| `⤎` + `🗶` | leave a panel | Back (green) and Close (red) on read-only menus, including help sections |
 | `⇧` / `⌫` | create / remove | Publish, Discard |
 | `✎` | edit | Edit Draft, Rename |
 | `↑` / `↓` | reorder | Up, Down |
@@ -96,12 +97,13 @@ both catalogs so the same action looks the same in every locale.
 | `ⓘ` / `◈` | information | Help, Privacy Policy, Preview; About, Privacy, Rules |
 | `⌘` | locale | Language |
 
-Read-only menus (stats main, help index, privacy index) carry a Close button
-that deletes the panel message. Interactive moderation flows never do, because
-closing the prompt would discard an in-flight action. Help section titles join
-the module name and section label with `➛`. Command tables use the Alias
-header whenever an alias marker is present, and the marker's parentheses are
-stripped from the cell.
+Read-only menus (stats main, help index and section, privacy index) carry a
+Close button that deletes the panel message. Interactive moderation flows never
+do, because closing the prompt would discard an in-flight action. Help section
+titles join the module name and section label with `➛` in the catalog, then the
+renderer centers them. Help section command tables omit the column header row;
+other command tables keep the Alias header whenever an alias marker is present,
+and the marker's parentheses are stripped from the cell.
 
 ### Label ownership
 
@@ -119,6 +121,7 @@ and `rules.py` are reached through their submodules rather than the package root
 |---|---|---|---|
 | `back_button`, `back_row(callback_data, locale)` | `back_to_start`, `check_main:*`, `stats_main`, or a module-specific target | green | Single owner of the Back button. |
 | `back_markup`, `with_back_row` | same | green | Wrap a Back row alone or append it to other rows. |
+| `back_close_row(callback_data, locale)` | same callback plus `close_msg` | green + red | Shared Back and Close row for read-only panels. |
 | `close_btn(locale)` | `close_msg` | red | Dismiss a read-only panel by deleting its message. |
 | `_build_topic_rows` | caller-supplied callbacks | caller-supplied | Pair items into two-column rows. |
 | `nav_row(page, total_pages, cb_prefix, locale)` | `<prefix>:<page-1>`, `<prefix>:<page+1>` | green | Prev/Next row for paged views. |
@@ -168,7 +171,7 @@ appeal; a legacy payload without the suffix falls back to the tapped message id.
 | Builder | Emits | Style |
 |---|---|---|
 | `picker_btn(items, selected)` | `rules_step:pick:<id>` (blue), `other` (none), `done` (green), `clear` (none), `cancel` (red) | mixed |
-| `editor_sections_btn(has_content)` | The live main editor panel: `rules_edit_draft` (blue), `rules_preview` (blue), Upload .md (blue), `rules_lang` (blue), Close; adds `rules_publish` (green) and `rules_discard` (red) only when the draft has items | mixed |
+| `editor_panel_btn(locale, has_content=..., content_locale=...)` | The live main editor panel: `rules_edit_draft` (blue), `rules_preview` (blue), Upload .md (blue), `rules_lang` (blue), Close; adds `rules_publish` (green) and `rules_discard` (red) only when the draft has items | mixed |
 | `rules_language_btn`, `rules_section_btn`, `section_editor_btn` | `rules_lang_set:<code>`, `rules_sections`, `rules_section_title`, `rules_section_edit:<id>` | mixed |
 | `draft_preview_btn`, `draft_preview_sections_btn` | `rules_preview_cat:<key>`, `rules_preview_sec:<n>`, Back to the editor panel + Close | mixed |
 | `editor_items_page_btn` | `rules_items_page:<n>` for the paginated item list | mixed |
@@ -197,7 +200,8 @@ collision suffix stay within 64 bytes.
 | `stats_search_row` | `stats_bans_search` | blue |
 | `stats_search_panel_btn` | `stats_search_cancel` | red |
 | `stats_search_results_btn` | Legacy numbered hits; no production caller | mixed |
-| `paged_drill_btn`, `stats_list_btn` | Legacy numbered grid; no production caller | mixed |
+| `paged_drill_btn` | Paginated Prev/Next rows, used by `/check` warning drill-downs | mixed |
+| `stats_list_btn` | Legacy numbered grid; no production caller | mixed |
 | `stats_list_nav_btn` | `nav_row` (Prev/Next), optional Search row, Back (green); no numbered buttons | mixed |
 | `stats_search_results_nav_btn` | New Search (blue), Back (green) | mixed |
 
@@ -217,6 +221,7 @@ three-part callbacks still work.
 | `additional_menu_btn` | Main Channel URL alone, then Discussion Group and Appeals URLs, then Logs URL, then Back | blue + none |
 | `groups_menu_btn`, `tcgroups_btn` | Detailed/Simple toggle | blue |
 | `help_topics_menu_btn`, `help_topics_btn`, `module_help_btn` | `helpc_*`, `helps_<module>:<index>` | blue |
+| `back_to_module_btn(callback, locale, close=True)` | module callback plus `close_msg` on help section panels | green + red |
 | `privacy_btn`, `privacy_policy_sections_btn` | `privacy_policy_menu`, `privacy_section_<n>`, Back | blue + none |
 | `language_list_btn(scope, items, selected)` | `lang:set:<scope>:<code>` | blue, selected green |
 

@@ -268,6 +268,7 @@ The Flask keep-alive server binds to `${BIND_HOST}:${PORT}` (`BIND_HOST` default
 
 - `GET /` returns `OK` for uptime monitors.
 - `GET /health` returns subsystem status (database, Redis, scheduler, circuit breakers) as JSON, with HTTP 503 while degraded.
+- `GET /metrics` exposes Prometheus metrics when the `observability` extra is installed; it is absent otherwise.
 
 > [!TIP]
 > Point uptime monitors at `GET /health`: the 503 status tells load balancers and watchdogs the instance needs attention without reading the body.

@@ -125,7 +125,7 @@ optional `prometheus-client` endpoint at `/metrics`. Run
 database-call boundary, the cache on hit and miss, and the bounded fan-out. It
 needs no external service; use the numbers as a relative baseline, not a latency
 promise. The `/health` response
-reports database, Redis, scheduler, and Telegram circuit state. Relevant
+reports database, Redis, scheduler, polling, and Telegram circuit state. Relevant
 counts in logs include enforcement attempt outcomes, member-cache drops, and
 rate-limit waits. Use these signals to decide whether to tune a pool size, a TTL, or a
 fan-out bound; do not change them speculatively.

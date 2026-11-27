@@ -109,7 +109,8 @@ workers pause on an open circuit and admit one probe in half-open state.
 
 APScheduler 3.11.3 runs an `AsyncIOScheduler` with a `SQLAlchemyJobStore` table
 `apscheduler_jobs` in the configured schema. Schedules are reconciled on startup
-by reading stored jobs once in memory, and UTC is explicit.
+by reading stored jobs in bulk and sweeping unknown ids with a second read, and
+UTC is explicit.
 
 | Job ID | Cadence | Purpose |
 |---|---|---|

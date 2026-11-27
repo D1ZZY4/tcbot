@@ -53,8 +53,9 @@ See [Database](database.md), [Security](security.md), and [Runtime](runtime.md).
    is probed first so a bind failure fails fast.
 3. Create the single Kurigram client (bot token and API credentials) and discover
    the active modules.
-4. Register the member-cache harvester at group `10`, all module handlers, and the
-   error handler. Per-handler `ratelimiter()` decorators provide throttling.
+4. Register the member-cache harvester at group `-1`, all module handlers, a
+   last-responder callback handler at group `20`, and the error handler.
+   Per-handler `ratelimiter()` decorators provide throttling.
 5. `init_shared_subsystems()` connects PostgreSQL, applies migrations, seeds the
    Owner, registers infrastructure destinations, connects Redis, starts the
    Kurigram session, attaches the error reporter, starts the scheduler, and warms
@@ -81,9 +82,10 @@ collected module handlers, and the error handler.
 Most module handlers sit in Kurigram group `0`, where the dispatcher runs the
 first matching handler. A handler that does not own an update must hand it on
 with `ContinuePropagation` instead of returning normally; a later group does not
-suppress earlier groups. Commands are matched by `build_prefixed_filters()` against
-all configured prefixes. See [Commands](../reference/commands.md) for the
-ownership table.
+suppress earlier groups. The unowned-callback responder sits in group `20`, so it
+runs only after every module handler has declined the tap. Commands are matched by
+`build_prefixed_filters()` against all configured prefixes. See
+[Commands](../reference/commands.md) for the ownership table.
 
 ## Handler anatomy
 

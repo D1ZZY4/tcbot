@@ -105,7 +105,9 @@ so inline keyboards and rich markup stay consistent.
   be expressed as rich buttons keep their inline representation.
 - Shared markup helpers (`esc`, `bold`, `code`, `user_ref`, and the rest) and
   localized wording come from `tcbot/utils/i18n.py`.
-- Plain notices and callback alerts stay unparsed; they are not rich messages.
+- Plain notices and callback alerts are rendered with `plain=True`, so Telegram
+  shows literal characters; they still travel inside a rich HTML payload, so
+  escape dynamic values before inserting them.
 - Kurigram speaks MTProto directly and is the sole Telegram framework. Its
   native rich-message API carries all HTML formatting; the same client also
   handles commands and long-polling updates. Rich send, reply and edit helpers

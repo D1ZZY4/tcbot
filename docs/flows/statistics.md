@@ -92,7 +92,10 @@ flowchart TD
 
 Each list is one rich table. A row carries the whole record, so there is no
 per-item detail card and no numbered drill-in buttons. The keyboard keeps only
-Prev/Next, the Search shortcut on bans, and Back.
+Prev/Next, the Search shortcut on bans, and Back. The overview has no column
+header row: a centered one-cell title, a headerless Owner row, a divider, then
+headerless grouped tables with captions keep the counters scannable. The title
+and captions come from `stats.toml`; no wording is hardcoded in Python.
 
 The overview gathers the owner id, role counts, active ban count, active group
 count, total users, and the viewer's owner status and effective role in one
@@ -228,7 +231,7 @@ re-checks rank before it renders. See [Permissions](permissions.md).
 
 ## Edge cases
 
-- A degraded overview shows unavailable fields rather than zeros.
+- A degraded overview marks each failed count and the Owner line as unavailable instead of showing zeros or claiming no Owner is set. The caveat is a real footer block below the tables, and its wording refers to affected values rather than to removed "totals".
 - A page beyond the available range is clamped to the last page by `clamp_page`.
 - A failed background refresh leaves the cached value visible; it does not
   block the view.

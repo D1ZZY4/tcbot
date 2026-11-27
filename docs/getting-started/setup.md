@@ -86,7 +86,9 @@ endpoints:
 
 - `GET /` returns `OK`.
 - `GET /health` returns JSON with HTTP 200 when core subsystems are ready and
-  503 when degraded. Redis is a hint only; a Redis outage does not page the instance.
+  503 when degraded. Its `polling` field reports whether the Kurigram loop is
+  actually running, so a live process that has stopped consuming updates reads
+  degraded. Redis is a hint only; a Redis outage does not page the instance.
 - `GET /metrics` is available when the optional `prometheus-client` extra is installed.
 
 ## Run with Docker Compose

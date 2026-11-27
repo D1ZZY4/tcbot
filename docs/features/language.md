@@ -21,7 +21,7 @@ i18n/
 │   ├── common.toml   Shared notices and section labels.
 │   ├── button.toml   Every button label, never duplicated.
 │   ├── language.toml Language flow strings.
-│   ├── help.toml     Help index header.
+│   ├── help.toml     Help index, module, and section titles plus guidance.
 │   └── <domain>.toml One file per feature.
 ├── id-ID/            Indonesian catalog.
 └── README.md         Translator contract.

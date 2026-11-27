@@ -84,7 +84,7 @@ two-part shapes remain valid.
 | `rules_show:<key>` | `buttons/rules.py::rules_index_btn` | `rules.py`. |
 | `rules_index:<n>`, `rules_section:<n>` | `buttons/rules.py::rules_index_btn`, `category_sections_btn` | `rules.py` paginated topic index. |
 | `rules_prev:<n>`, `rules_next:<n>`, `rules_menu`, `rules_page:<n>` | Retired keyboard builders | `rules.py` stale-tap handlers; the live menu uses `rules_index:<n>`. |
-| `rules_edit_draft`, `rules_preview`, `rules_publish`, `rules_upload`, `rules_discard` | `editor_sections_btn`, `categories_btn` | `rules_editor.py` menu state. |
+| `rules_edit_draft`, `rules_preview`, `rules_publish`, `rules_upload`, `rules_discard` | `editor_panel_btn`, `editor_sections_btn` | `rules_editor.py` menu state. |
 | `rules_panel`, `rules_lang`, `rules_lang_set:<code>`, `rules_sections`, `rules_section_title`, `rules_section_edit:<id>`, `rules_fmt:<style>`, `rules_items_page:<n>`, `rules_preview_cat:<key>`, `rules_preview_sec:<n>` | `buttons/rules.py` language, section, formatting, item, and preview builders | `rules_editor.py` menu state. |
 | `rules_discard_yes`, `rules_discard_no` | `buttons/rules.py::confirm_btn` | `rules_editor.py` discard state. |
 | `rules_cat:<key>`, `rules_cat_add`, `rules_cat_rename:<key>`, `rules_cat_up:<key>`, `rules_cat_down:<key>`, `rules_cat_del:<key>` | `buttons/rules.py::categories_btn` | `rules_editor.py` menu state. |

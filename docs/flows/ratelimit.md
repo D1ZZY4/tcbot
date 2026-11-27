@@ -43,8 +43,8 @@ function name, so two handlers on the same tier keep independent buckets.
 | `THROTTLE_STAFF` | 10 | 30 s | Staff state changes and approval callbacks |
 | `THROTTLE_MODERATION` | 5 | 60 s | Destructive moderation: ban, kick, mute, warn, promote, demote |
 | `THROTTLE_FEDERATION` | 3 | 60 s | Commands that fan out across every group |
-| `THROTTLE_BULK` | 3 | 300 s | Long cleanup and leave-all operations, transfer, promotion requests |
-| `THROTTLE_CRITICAL` | 1 | 300 s | A single destructive operation per window |
+| `THROTTLE_BULK` | 3 | 300 s | Long cleanup operations, transfer, promotion requests |
+| `THROTTLE_CRITICAL` | 1 | 300 s | A single destructive operation per window, including leave-all |
 
 `admins.py` uses `THROTTLE_MODERATION` on promote and demote commands,
 `THROTTLE_BULK` on transfer and promotion-request submission, and
