@@ -744,52 +744,79 @@ def upgrade() -> None:
     )
 
 
+# * (table, indexes) in the original drop order. 0003 removes these legacy
+# * tables, so a downgrade from a later revision meets a partially empty
+# * catalog. Every drop is guarded rather than aborting with a missing-relation
+# * error on an otherwise valid rollback.
+_LEGACY_LAYOUT = (
+    (
+        "warns",
+        (
+            "ix_warns_chat_id",
+            "ix_warns_time",
+            "ix_warns_user_chat_time",
+            "ix_warns_user_time",
+        ),
+    ),
+    (
+        "warn_counts",
+        (
+            "ix_warn_counts_chat_id",
+            "ix_warn_counts_updated_at",
+            "ix_warn_counts_user_count_time",
+        ),
+    ),
+    ("user_settings", ()),
+    ("tc_roles", ("ix_tc_roles_role",)),
+    ("tc_owners", ()),
+    ("tc_admins", ()),
+    (
+        "promotion_requests",
+        (
+            "ix_promotion_requests_status_date",
+            "ix_promotion_requests_target_status",
+            "uq_promotion_requests_pending",
+        ),
+    ),
+    ("pending_joins", ()),
+    ("mutes", ("ix_mutes_chat_id", "ix_mutes_user_time")),
+    (
+        "mtproto_state",
+        (
+            "ix_mtproto_state_date",
+            "ix_mtproto_state_id_pattern",
+            "ix_mtproto_state_phone_number",
+            "ix_mtproto_state_usernames",
+        ),
+    ),
+    (
+        "member_cache",
+        (
+            "ix_member_cache_first_name_lower",
+            "ix_member_cache_last_updated",
+            "ix_member_cache_username_lower",
+        ),
+    ),
+    ("kicks", ("ix_kicks_chat_id", "ix_kicks_user_time")),
+    ("federated_groups", ("ix_groups_active",)),
+    (
+        "bans",
+        (
+            "ix_bans_active_time",
+            "ix_bans_active_user",
+            "ix_bans_user_active",
+            "ix_bans_user_appeal",
+            "ix_bans_user_time",
+            "uq_bans_active_user",
+        ),
+    ),
+    ("active_mutes", ("ix_active_mutes_until",)),
+)
+
+
 def downgrade() -> None:
-    """Drop every index and table."""
-    op.drop_index("ix_warns_chat_id", table_name="warns")
-    op.drop_index("ix_warns_time", table_name="warns")
-    op.drop_index("ix_warns_user_chat_time", table_name="warns")
-    op.drop_index("ix_warns_user_time", table_name="warns")
-    op.drop_table("warns")
-    op.drop_index("ix_warn_counts_chat_id", table_name="warn_counts")
-    op.drop_index("ix_warn_counts_updated_at", table_name="warn_counts")
-    op.drop_index("ix_warn_counts_user_count_time", table_name="warn_counts")
-    op.drop_table("warn_counts")
-    op.drop_table("user_settings")
-    op.drop_index("ix_tc_roles_role", table_name="tc_roles")
-    op.drop_table("tc_roles")
-    op.drop_table("tc_owners")
-    op.drop_table("tc_admins")
-    op.drop_index("ix_promotion_requests_status_date", table_name="promotion_requests")
-    op.drop_index(
-        "ix_promotion_requests_target_status", table_name="promotion_requests"
-    )
-    op.drop_index("uq_promotion_requests_pending", table_name="promotion_requests")
-    op.drop_table("promotion_requests")
-    op.drop_table("pending_joins")
-    op.drop_index("ix_mutes_chat_id", table_name="mutes")
-    op.drop_index("ix_mutes_user_time", table_name="mutes")
-    op.drop_table("mutes")
-    op.drop_index("ix_mtproto_state_date", table_name="mtproto_state")
-    op.drop_index("ix_mtproto_state_id_pattern", table_name="mtproto_state")
-    op.drop_index("ix_mtproto_state_phone_number", table_name="mtproto_state")
-    op.drop_index("ix_mtproto_state_usernames", table_name="mtproto_state")
-    op.drop_table("mtproto_state")
-    op.drop_index("ix_member_cache_first_name_lower", table_name="member_cache")
-    op.drop_index("ix_member_cache_last_updated", table_name="member_cache")
-    op.drop_index("ix_member_cache_username_lower", table_name="member_cache")
-    op.drop_table("member_cache")
-    op.drop_index("ix_kicks_chat_id", table_name="kicks")
-    op.drop_index("ix_kicks_user_time", table_name="kicks")
-    op.drop_table("kicks")
-    op.drop_index("ix_groups_active", table_name="federated_groups")
-    op.drop_table("federated_groups")
-    op.drop_index("ix_bans_active_time", table_name="bans")
-    op.drop_index("ix_bans_active_user", table_name="bans")
-    op.drop_index("ix_bans_user_active", table_name="bans")
-    op.drop_index("ix_bans_user_appeal", table_name="bans")
-    op.drop_index("ix_bans_user_time", table_name="bans")
-    op.drop_index("uq_bans_active_user", table_name="bans")
-    op.drop_table("bans")
-    op.drop_index("ix_active_mutes_until", table_name="active_mutes")
-    op.drop_table("active_mutes")
+    """Drop every legacy index and table that is still present."""
+    for table_name, indexes in _LEGACY_LAYOUT:
+        for index_name in indexes:
+            op.drop_index(index_name, table_name=table_name, if_exists=True)
+        op.drop_table(table_name, if_exists=True)

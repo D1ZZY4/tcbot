@@ -62,10 +62,17 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Remove the publication objects while leaving rule content intact."""
-    op.execute(
-        "DROP TRIGGER IF EXISTS trg_validate_rule_publication_scope "
-        "ON rule_publications"
-    )
+    bind = op.get_bind()
+    # * A fresh chain never created the rules tables, so IF EXISTS on a trigger
+    # * or column is not enough: PostgreSQL still requires the relation itself.
+    publication_table = bind.execute(
+        text("SELECT to_regclass('rule_publications') IS NOT NULL")
+    ).scalar()
+    if publication_table:
+        op.execute(
+            "DROP TRIGGER IF EXISTS trg_validate_rule_publication_scope "
+            "ON rule_publications"
+        )
     op.execute("DROP FUNCTION IF EXISTS validate_rule_publication_scope() CASCADE")
     op.execute(
         "DELETE FROM retention_policies WHERE target_table IN "
@@ -74,5 +81,6 @@ def downgrade() -> None:
     for name in reversed(_NEW_TABLES):
         op.execute(f"DROP TABLE IF EXISTS {name} CASCADE")
     op.execute("DROP INDEX IF EXISTS uq_rule_set_versions_draft")
-    op.execute("ALTER TABLE rule_items DROP COLUMN IF EXISTS category_sort_order")
-    op.execute("ALTER TABLE rule_items DROP COLUMN IF EXISTS category_title")
+    if bind.execute(text("SELECT to_regclass('rule_items') IS NOT NULL")).scalar():
+        op.execute("ALTER TABLE rule_items DROP COLUMN IF EXISTS category_sort_order")
+        op.execute("ALTER TABLE rule_items DROP COLUMN IF EXISTS category_title")

@@ -47,4 +47,12 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Drop the presentation column; the stored title remains the label."""
-    op.execute("ALTER TABLE rule_categories DROP COLUMN IF EXISTS description")
+    # * A fresh chain never created this table; IF EXISTS applies to the
+    # * column, not to the relation, so guard the relation too.
+    exists = (
+        op.get_bind()
+        .execute(text("SELECT to_regclass('rule_categories') IS NOT NULL"))
+        .scalar()
+    )
+    if exists:
+        op.execute("ALTER TABLE rule_categories DROP COLUMN IF EXISTS description")
