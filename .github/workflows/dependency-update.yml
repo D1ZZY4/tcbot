@@ -200,37 +200,13 @@ jobs:
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           OWNER_ID: ${{ secrets.OWNER_ID }}
-        run: |
-          python - << 'PYEOF'
-          import json, os, sys, urllib.request
-
-          token = os.getenv("BOT_TOKEN", "")
-          owner_id = os.getenv("OWNER_ID", "")
-
-          if not token or not owner_id or token.startswith("test:"):
-              sys.exit(0)
-
-          text = (
-              "<b>Dependency Update</b>\n\n"
-              "Dependencies updated\n"
-              "Result: PR created\n\n"
-              f'<a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View workflow</a>'
-          )
-
-          payload = json.dumps({
-              "chat_id": owner_id,
-              "text": text,
-              "parse_mode": "HTML",
-              "disable_web_page_preview": True,
-          }).encode()
-
-          req = urllib.request.Request(
-              f"https://api.telegram.org/bot{token}/sendMessage",
-              data=payload,
-              headers={"Content-Type": "application/json"},
-          )
-          try:
-              urllib.request.urlopen(req, timeout=15)
-          except Exception as exc:
-              print(f"Notification failed: {exc}", file=sys.stderr)
-          PYEOF
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+          CI_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # * Kurigram needs API_ID/API_HASH to authorize the bot-token client.
+          # * Importing the rich helpers also loads the lazy app config, which
+          # * requires DATABASE_URL and PROOFS; the notice never touches a
+          # * database, so local dummy values are sufficient.
+          DATABASE_URL: "postgresql://localhost:5432/tcbot"
+          PROOFS: "-1"
+        run: uv run --frozen python scripts/notify_ci.py
