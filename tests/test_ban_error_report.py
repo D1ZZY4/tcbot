@@ -14,6 +14,7 @@ import pytest
 from tcbot import database as db
 from tcbot.modules.helper import guards, messages
 from tcbot.modules.helper.pipelines import ban_executor, moderation_enforcement
+from tcbot.utils.time_and_date import utc_now
 
 
 class _Log:
@@ -51,6 +52,73 @@ def _meta() -> dict[str, Any]:
         "ban_prompt_chat_id": 0,
         "ban_locale": "en-US",
     }
+
+
+@pytest.mark.asyncio
+async def test_a_reban_with_a_failed_upload_writes_no_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A re-ban must not silently carry old proof when the new upload fails."""
+
+    async def _refusal(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def _groups() -> list[dict[str, Any]]:
+        return []
+
+    async def _locale(*_args: Any, **_kwargs: Any) -> str:
+        return "en-US"
+
+    async def _existing(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "ban_id": "ban00000001",
+            "proof_message_id": 5,
+            "timestamp": utc_now(),
+        }
+
+    async def _identity(*_args: Any, **_kwargs: Any) -> Any:
+        return SimpleNamespace(username="testbot")
+
+    async def _failed_upload(*_args: Any, **_kwargs: Any) -> Any:
+        return SimpleNamespace(
+            message_id=0,
+            link="",
+            expected_item_count=0,
+            items=[],
+            landed=False,
+            documents=list,
+        )
+
+    edits: list[object] = []
+
+    async def _edit(*_args: Any, **_kwargs: Any) -> Any:
+        edits.append(_kwargs.get("text") or _args[3])
+        return None
+
+    recorded: list[object] = []
+
+    async def _record(*_args: Any, **_kwargs: Any) -> Any:
+        recorded.append(_args)
+        return 0, True, "ban00000001", 1
+
+    monkeypatch.setattr(guards, "enforcement_refusal", _refusal)
+    monkeypatch.setattr(db.groups_db, "active_groups", _groups)
+    monkeypatch.setattr(ban_executor, "locale_for_user", _locale)
+    monkeypatch.setattr(db.bans_db, "get_active_ban", _existing)
+    monkeypatch.setattr(ban_executor, "bot_identity", _identity)
+    monkeypatch.setattr(ban_executor, "upload_proof_media", _failed_upload)
+    monkeypatch.setattr(ban_executor, "safe_edit_message", _edit)
+    monkeypatch.setattr(ban_executor, "_execute_ban_record", _record)
+
+    meta = _meta()
+    meta["ban_prompt_chat_id"] = -100
+    meta["ban_prompt_msg_id"] = 77
+
+    await ban_executor.execute_ban(_Bot(), [], meta)  # type: ignore[arg-type]
+
+    assert recorded == []
+    assert len(edits) == 1
+    assert "proof media could not be uploaded" in str(edits[0])
 
 
 @pytest.mark.asyncio

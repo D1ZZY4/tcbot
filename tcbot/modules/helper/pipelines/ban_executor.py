@@ -273,17 +273,16 @@ async def execute_ban(bot: Client, msgs: list[Message], meta: dict[str, Any]) ->
         upload = await upload_proof_media(bot, msgs, caption)
         proof_msg_id = upload.message_id
         proof_link = upload.link
-        # * Proof is required for new bans: a proof-less record would let
-        # * /check and audit logs reference evidence that never landed.
-        # * A gallery that lost a file is a partial upload, and the schema
-        # * refuses a manual ban that attaches one: the moderator has to
-        # * retry the evidence instead of filing a ban on incomplete proof.
-        # * Updates keep the old proof via the re-ban branch.
+        # * Proof is required for every filed ban, including re-bans. A
+        # * re-ban is a new decision with a new reason; silently carrying the
+        # * previous evidence would link an old incident to a new federation
+        # * ban. A total upload failure therefore aborts just like a partial
+        # * gallery, and the moderator is asked to resend the proof.
         proof_incomplete = (
             upload.expected_item_count > 0
             and len(upload.items) < upload.expected_item_count
         )
-        if proof_incomplete or (not is_update and not upload.landed):
+        if proof_incomplete or not upload.landed:
             log.error(
                 "Ban aborted for target=%d: proof upload returned %d/%d items",
                 target_id,
