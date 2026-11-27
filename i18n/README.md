@@ -93,7 +93,10 @@ Every send and edit helper accepts `parse_mode` for call-site compatibility but
 discards it; the string always reaches Telegram inside rich HTML. Plain-mode
 output is not HTML-escaped, so an untrusted dynamic value must be escaped with
 `esc()` or wrapped by a trusted formatting helper before it enters a rich
-message. There is no parse-mode fallback transport.
+message. There is no parse-mode fallback transport. Prefer the default rich mode
+for panels, prompts, and notices; `plain=True` is for callback toasts, button
+labels, and short notices that must show literal characters. A plain fragment
+composed into a panel must be escaped at that boundary.
 
 ## Adding a locale
 

@@ -7,7 +7,7 @@ state constants are in [reference/callbacks.md](../reference/callbacks.md).
 
 ## Payload shape
 
-`modules/helper/rich/block.py` owns payload assembly; `send_msg.py`, `reply_msg.py`, and `edit_msg.py` own the send, reply, and edit transports.
+`modules/helper/rich/block.py` owns payload assembly; `send_msg.py`, `reply_msg.py`, `edit_msg.py`, and `forward_msg.py` own the send, reply, edit, and forward transports.
 `html_message(*blocks, rtl=False, skip_entity_detection=False, media=None)` returns a
 dictionary with `html` as the newline-joined non-empty blocks. It adds `is_rtl`,
 `skip_entity_detection`, and `media` only when supplied. `media` carries the
@@ -27,7 +27,10 @@ than eight buttons, or an overlong callback keeps the whole keyboard as native
 inline markup instead of embedding any rich button rows. Empty navigation rows
 from paged keyboards are dropped losslessly before that decision. Each rich button carries exactly one
 action, with callback data limited to 1-64 bytes and copy text to 1-256
-characters, matching Kurigram's `RichMessageButton.write()`.
+characters, matching Kurigram's `RichMessageButton.write()`. An unconvertible
+keyboard stays inline on the same `InputRichMessage`; this is a button
+representation on the rich message, never a second transport or a plain-text
+fallback.
 
 | Field | Set by | Meaning |
 |---|---|---|
@@ -37,7 +40,7 @@ characters, matching Kurigram's `RichMessageButton.write()`.
 | `media` | `html_message(..., media=[...])` | Embedded media referenced by `tg://photo|video|document|audio?id=` links. |
 | `blocks` | `blocks_message(blocks)` | Explicit block payload; buttons are not embedded into it. |
 | `rich_message` | `send_rich`, `edit_rich` | API key carrying the payload above. |
-| `reply_markup` | `send_rich`, `edit_rich` | Inline keyboard kept as fallback when conversion did not embed it. |
+| `reply_markup` | `send_rich`, `edit_rich` | Inline keyboard retained on the same rich message when conversion did not embed it. |
 
 ## Send and reply
 
@@ -85,7 +88,7 @@ flowchart TD
 | `safe_edit` | `safe_edit(msg, text, *, log_level="warning", log_label=None, catch_all=False, clear_markup=False, parse_mode=None, **kwargs)` | Edits via `msg.edit_text(rich_message=...)`; `clear_markup` sends an empty keyboard. |
 | `safe_edit_cb` | `safe_edit_cb(q, text, *, log_level="warning", log_label=None, catch_all=False, clear_markup=False, parse_mode=None, **kwargs)` | Edits via `q.edit_message_text(rich_message=...)`; `clear_markup` strips old buttons. |
 | `safe_edit_message` | `safe_edit_message(bot, chat_id, message_id, text, *, log_level="warning", log_label=None, catch_all=False, clear_markup=False, parse_mode=None, **kwargs)` | Edits by id via `bot.edit_message_text(rich_message=...)`; `clear_markup` strips old buttons. |
-| `cb_error_edit` | `cb_error_edit(q, text, *, log_label, parse_mode=None, log_level="warning")` | `safe_edit_cb` with `catch_all=True`; it does not clear the keyboard. Callers that need removal pass `clear_markup=True` or call `clear_markup_cb`. |
+| `cb_error_edit` | `cb_error_edit(q, text, *, log_label, parse_mode=None, log_level="warning")` | `safe_edit_cb` with `catch_all=True` and `clear_markup=True`; a refusal always removes the old keyboard. `clear_markup_cb` stays a standalone helper for other call sites. |
 | `clear_markup` | `clear_markup(bot, chat_id, message_id)` | Removes the inline keyboard by chat and message id; keeps benign gone-target refusals silent. |
 | `clear_markup_cb` | `clear_markup_cb(q)` | Callback-query form of the same keyboard-only edit. |
 
@@ -97,6 +100,15 @@ and `safe_edit_message()` return `True` on success or an unchanged message, and
 send a fresh post instead of re-editing a dead id. Unexpected exceptions are
 logged and return `False`, or are re-raised when `catch_all` is false.
 `parse_mode` is accepted and ignored by the safe helpers.
+
+## Forward
+
+`forward_rich(msg, chat_id, *, message_thread_id=None)` lives in
+`rich/forward_msg.py` and calls `msg.forward(...)`. A forward keeps the original
+sender header, so it cannot be rendered as a bot-authored `InputRichMessage`.
+It is the single owned forwarding path used by appeal record posting and
+broadcasts; it has no parse-mode variant and no alternate text transport. See
+[Appeals](appeals.md#atomic-submit-and-review-posting).
 
 ## Inline keyboard to rich buttons
 
@@ -217,7 +229,7 @@ lists with attributes and bare media are recognized as blocks too.
 | `answer_alert(q, text)` | `q.answer(text, show_alert=True)`; never raises. |
 | `answer_and_edit(q, text, **kwargs)` | `q.answer()` and `safe_edit_cb()` in one `asyncio.gather(..., return_exceptions=True)`. |
 | `ack_and_render(q, data_coro)` | `q.answer()` parallel to a data coroutine returning `(text, markup)`, then `safe_edit_cb()`. |
-| `cb_error_edit(q, text, *, log_label, ...)` | Catch-all replacement of the message with a notice; the existing keyboard is not cleared. |
+| `cb_error_edit(q, text, *, log_label, ...)` | Catch-all replacement of the message with a notice; the existing keyboard is always cleared. |
 | `clear_markup_cb(q)` | `q.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([]))` to remove the keyboard. |
 
 Callback answers are plain text and have no rich equivalent. Handlers call
@@ -230,9 +242,11 @@ on `:` and return `None` on malformed payloads.
 
 No parse mode is selected anywhere in the application. `reply_rich`,
 `safe_edit`, `safe_edit_cb`, `safe_edit_message`, and `cb_error_edit` accept a
-`parse_mode` argument and discard it. Direct Kurigram fallback calls pass no parse
-mode; the decided-appeal card closure uses `edit_rich` with an explicitly
-empty keyboard, as traced in [Appeals](appeals.md#durable-card-edits).
+`parse_mode` argument and discard it. Every text send, reply, and edit carries an
+`InputRichMessage`; the only remaining direct Kurigram calls are keyboard-only
+edits (`clear_markup`, `clear_markup_cb`), which send no text and select no mode.
+The decided-appeal card closure uses `edit_rich` with an explicitly empty
+keyboard, as traced in [Appeals](appeals.md#durable-card-edits).
 There is no application-level default parse-mode setting in `__main__.py`.
 
 User-facing wording comes from `t()` in `utils/i18n.py`, which owns the `Safe`

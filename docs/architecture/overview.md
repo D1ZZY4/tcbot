@@ -114,7 +114,7 @@ visible work. See [Security](security.md) for the tier and guard contracts.
 | `pipelines/` | Domain-named `*_executor.py`, `*_conversation.py`, `*_steps.py`, `*_panels.py`, or plain ConversationHandler factories and their steps. |
 | `buttons/` | Every inline keyboard builder. |
 | `messages/` | Safe edits, channel delivery, panels, replies, and audit-log builders; re-exports rich transports for stable dotted paths. |
-| `rich/` | Rich HTML primitives, links and mentions, buttons, block conversion, media, and the send/edit transports. |
+| `rich/` | Rich HTML primitives, links and mentions, buttons, block conversion, media, and the send, reply, edit, and forward transports. |
 
 ## Runtime utilities
 

@@ -149,3 +149,32 @@ group or a lookup outage blocks the action, which prevents a non-federation chat
 from aggregating into a federation-wide threshold ban. Callback prompts may
 carry the opener as a trailing `:{executor}` segment so a different tapper gets
 an alert while the prompt stays live.
+
+## Telegram API surface is not an authorization bypass
+
+Kurigram 2.2.27 speaks MTProto and exposes a much wider method surface than the
+HTTP Bot API. Telegram documents that a session authorized with a bot token is
+still a bot identity, that bots may call most MTProto methods, and that each
+method's own eligibility note decides whether bots may use it. The raw methods
+this application relies on, `channels.editBanned` and `channels.editAdmin`, are
+both documented as callable by users and bots, and both still list
+`CHAT_ADMIN_REQUIRED`, `CHAT_WRITE_FORBIDDEN`, and `RIGHT_FORBIDDEN` among their
+possible errors. A raw call therefore cannot supply a right the acting bot was
+not granted.
+
+The layers stay separate in code: `Client` wrappers (`ban_chat_member`,
+`unban_chat_member`, `restrict_chat_member`, `promote_chat_member`) go through
+generated raw TL functions and the session's RPC error conversion; the
+application's own role and group checks decide whether to call them at all.
+`BOT_CHANNELS_NA` and `BOT_GROUPS_BLOCKED` are account-level limits documented by
+Telegram, not something the bot can override. Flood waits, target state, and
+chat membership remain server-side checks. Rich message transport is also a
+single owner: no feature module calls a raw send, reply, edit, or forward method
+outside `modules/helper/rich/`.
+
+Official references: Telegram's [Working with bots using MTProto](https://core.telegram.org/api/bots),
+[Bot API](https://core.telegram.org/bots/api), [channels.editBanned](https://core.telegram.org/method/channels.editBanned),
+and [channels.editAdmin](https://core.telegram.org/method/channels.editAdmin).
+The Kurigram documentation site was unavailable behind a bot challenge during
+this review; the installed package source and the upstream README were used
+instead.

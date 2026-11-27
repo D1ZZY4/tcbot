@@ -47,8 +47,9 @@ admit, which the enforcement worker uses to size its claims. See
 
 ## Time and transport budgets
 
-`time_and_date.py` owns `utc_now()`, `to_utc()`, `fmt_dt()`, `parse_duration()`,
-`fmt_duration()`, and monotonic measurement. All database timestamps are stored
+`time_and_date.py` owns `utc_now()`, `to_utc()`, `fmt_date()`, `fmt_time()`,
+`date_or_unknown()`, `time_or_unknown()`, `parse_duration()`, `fmt_duration()`,
+and monotonic measurement. All database timestamps are stored
 in UTC, and naive values are assumed UTC before arithmetic. `parse_duration()`
 accepts `s`, `m`, `h`, `d`, `w`, `mo`, and `ye` suffixes with a 366-day cap,
 which stays inside Telegram's finite restriction limit.

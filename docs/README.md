@@ -39,7 +39,7 @@ state machine, database writes, Telegram delivery, failure paths, and exact name
 | [Rate limiting](flows/ratelimit.md) | Throttles, Redis sliding window, circuit breakers, flood waits. |
 | [Persistence](flows/persistence.md) | Transactions, enforcement ledger, retries, outbox, scheduler and pg_cron. |
 | [Cache](flows/cache.md) | L1/L2, single-flight, generation and epoch guards, tombstones, FIFO queue. |
-| [Transport](flows/transport.md) | Rich send and edit, keyboard conversion, callbacks, error reports, links. |
+| [Transport](flows/transport.md) | Rich send, reply, edit and forward, keyboard conversion, callbacks, error reports, links. |
 | [Extraction and user data](flows/extraction-user-data.md) | Target resolution, MTProto fallback, identity classification, mention cache. |
 | [Banning](flows/banning.md) | Federation ban, re-ban confirmation, proof, dual gate, decision write, summary. |
 | [Unbanning](flows/unbanning.md) | Fail-closed demote, atomic revoke, per-group delivery, appeal slot, repair. |
@@ -68,12 +68,14 @@ state machine, database writes, Telegram delivery, failure paths, and exact name
 ### Operations
 
 - [Backup and restore](operations/backup-and-restore.md) - PostgreSQL dump and restore procedures.
-- [CI/CD](operations/ci-cd.md) - the seven GitHub Actions workflows and their secrets.
+- [CI/CD](operations/ci-cd.md) - the six GitHub Actions workflows and their secrets.
 - [Performance](operations/performance.md) - bounded concurrency, batching, cache, and measurement.
 
 ### Releases
 
 Published release notes are immutable history under [v7.1.0](releases/v7.1.0.md).
+Historical notes describe their own release, including superseded MarkdownV2 and
+plain-text paths; the current contract lives in [Transport](flows/transport.md).
 The root [CHANGELOG.md](../CHANGELOG.md) holds the unreleased section and the release index.
 
 ## Architecture at a glance

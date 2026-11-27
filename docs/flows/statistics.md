@@ -205,7 +205,7 @@ All panels are assembled as localized rich text and delivered through
 | `messages/rules.py` | Rules read view, categories, items, and selected summary. |
 
 Dynamic values are wrapped with `Safe()` only after passing through `code()`,
-`bold()`, `italic()`, `user_ref()`, or `fmt_dt()`. The `t()` call owns escaping of
+`bold()`, `italic()`, `user_ref()`, `fmt_date()`, or `fmt_time()`. The `t()` call owns escaping of
 ordinary placeholders. `Check` and `Stats` view builders return a
 `(text, InlineKeyboardMarkup)` pair; handlers never build text themselves.
 

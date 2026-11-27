@@ -6,7 +6,7 @@ The user-facing feature page is [features/rules.md](../features/rules.md).
 
 ## Draft model
 
-A rule set owns categories and versions. One draft per set and working locale
+A rule set owns categories and versions. One draft per set and locale
 exists at a time; published versions are immutable. `open_draft()` clones the
 current published items into a new draft together with a snapshot of the
 category catalogue, so a later rename or reorder cannot change what an older
@@ -91,9 +91,9 @@ sequenceDiagram
     loop Each rendered part
         P->>DB: publications.upsert_slot by slot key
         DB-->>P: slot with optional message_id and hash
-        alt Existing id and matching hash
+        alt Existing usable message id
             P->>TG: safe_edit_message in place
-        else New or changed content
+        else No usable message id
             P->>TG: send_text
         end
         P->>DB: mark_synced or mark_failed
@@ -111,9 +111,12 @@ forever.
 The channel text is split into parts of at most 4000 UTF-16 units by
 `render_channel()`, grouped by category with a version and timestamp footer.
 Each part's final rendered text is hashed with SHA-256 and stored on its slot.
-A slot with a message id and matching hash is edited in place; a changed or
-missing message is sent fresh. `mark_failed(missing=True)` clears the stale id,
-so a deleted channel post is not retried forever.
+A slot with a usable message id is edited in place, whether its content changed
+or not; a slot whose target is gone is sent fresh. A matching hash is not enough
+to skip a failed slot: reconciliation requires the previous status to be
+`synced`. `mark_failed(missing=True)` clears the stale id, so a deleted channel
+post is not retried forever. The acknowledgement version follows the reader's
+locale with a working-locale fallback, matching `/rules` and the join button.
 
 | Run state | Meaning |
 |---|---|

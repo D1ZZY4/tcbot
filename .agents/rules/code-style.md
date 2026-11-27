@@ -241,7 +241,7 @@ The translator contract lives in [`i18n/README.md`](../../i18n/README.md). The u
 - Section labels render as raw text, while section bodies render as rich HTML.
 - Use `who_section`, `where_section`, and `target_section` with the resolved locale.
 - Every locale-dependent keyboard builder in `buttons/` takes `locale` and reads button labels from `button.toml`.
-- `help_topics_kb` is locale-independent.
+- `help_topics_btn` and `help_topics_menu_btn` take a locale and read their labels from `button.toml`.
 - Thread the handler locale through every relevant call site.
 
 ---
@@ -295,7 +295,7 @@ The translator contract lives in [`i18n/README.md`](../../i18n/README.md). The u
 - Do not inline `datetime.now(timezone.utc)` outside `tcbot.utils.time_and_date`.
 - Use `utc_now()` for database timestamps and elapsed-time checks.
 - Use `to_utc(dt)` before arithmetic when a database value may be naive.
-- Use `fmt_dt(dt)` or `utc_now_str()` for user-visible timestamps.
+- Use `fmt_date(dt)` and `fmt_time(dt)`, or `date_or_unknown()` and `time_or_unknown()` for optional values.
 - Keep timezone conversion and formatting centralized in `tcbot.utils.time_and_date`.
 - Do not mix naive and aware datetimes in comparisons or arithmetic.
 

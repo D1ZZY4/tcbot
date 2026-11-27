@@ -24,7 +24,7 @@ flowchart TD
     GATE --> FLOW["Flow in helper/pipelines"]
     FLOW --> DB[("PostgreSQL via engine.db_call")]
     FLOW --> CACHE[("Redis L1 memory and optional L2 cache")]
-    FLOW --> RICH["rich send, reply and edit helpers with InputRichMessage"]
+    FLOW --> RICH["rich send, reply, edit and forward helpers"]
     RICH --> U
     DB --> WK["moderation_enforcement, notification_worker, scheduler"]
     WK --> U
@@ -136,9 +136,12 @@ messages, and appeals live in the community moderation tables. Durable per-group
 work lives in `moderation_enforcement_runs`, `moderation_enforcement_targets`,
 and `moderation_enforcement_attempts`.
 
-User-facing messages render through `rich/send_msg.py`, `rich/reply_msg.py` and `rich/edit_msg.py` using
+User-facing messages render through `rich/send_msg.py`, `rich/reply_msg.py`,
+`rich/edit_msg.py`, and `rich/forward_msg.py`. Text sends, replies, and edits use
 Kurigram's native `InputRichMessage`. Keyboards are rich buttons; cells that
-cannot be expressed as rich buttons keep their inline keyboard. Plain notices and
-callback alerts stay unparsed. No parse mode is used anywhere. Every decision
+cannot be expressed as rich buttons keep their inline representation on the same
+rich message, never on a second transport. Forwards keep the original sender
+header and are owned by `forward_rich`. Plain notices and callback alerts are
+rendered as text inside a rich payload. No parse mode is used anywhere. Every decision
 commits to PostgreSQL before any Telegram call, and unfinished per-group
 deliveries are queued for the workers described in [Runtime](../architecture/runtime.md).

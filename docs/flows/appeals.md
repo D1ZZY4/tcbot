@@ -72,7 +72,7 @@ sequenceDiagram
     participant Logs as LOGS destination
     participant DB as bans_db
     User->>Flow: Valid #appeal text
-    Flow->>Appeals: message.forward(appeal_chat, message_thread_id)
+    Flow->>Appeals: forward_rich(msg, appeal_chat, message_thread_id)
     Appeals-->>Flow: appeal_msg_id
     Flow->>DB: get_ban ban_id for linked rules
     DB-->>Flow: rules

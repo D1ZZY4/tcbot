@@ -91,15 +91,17 @@ bold, italic, underline, strike, spoiler), `list.py` (lists and details),
 conversion), `link.py` (links, ID-based mentions, and Telegram URL builders),
 `media.py` (photo, video, slideshow, collage), and `text.py` (verbatim
 passthrough). `block.py` owns payload assembly and converts a rendered multiline
-fragment into rich block markup. `send_msg.py`, `reply_msg.py` and `edit_msg.py`
-own the send, reply and edit transports. They build Kurigram `InputRichMessage`
+fragment into rich block markup. `send_msg.py`, `reply_msg.py`, `edit_msg.py`
+and `forward_msg.py` own the send, reply, edit and forward transports. They
+build Kurigram `InputRichMessage`
 payloads, so rich HTML is rendered by the client itself; there is no parse mode
 and no MarkdownV2 fallback. Every send and edit must go through these helpers
 so inline keyboards and rich markup stay consistent.
 
 - Route new sends through `rich/send_msg.py` (`send_rich`, `send_text`) and
   `rich/reply_msg.py` (`reply_rich`, `reply_rich_result`), and edits through
-  `rich/edit_msg.py` (`edit_rich` and the safe-edit helpers). Every send uses a
+  `rich/edit_msg.py` (`edit_rich` and the safe-edit helpers), and forwards through
+  `rich/forward_msg.py` (`forward_rich`). Every send uses a
   `rich_message` payload. Rich buttons may sit in a `<tg-button-row>` after the
   content or inside a table cell via a raw `TableCell`; markup cells that cannot
   be expressed as rich buttons keep their inline representation.
@@ -110,9 +112,10 @@ so inline keyboards and rich markup stay consistent.
   escape dynamic values before inserting them.
 - Kurigram speaks MTProto directly and is the sole Telegram framework. Its
   native rich-message API carries all HTML formatting; the same client also
-  handles commands and long-polling updates. Rich send, reply and edit helpers
-  live in `rich/send_msg.py`, `rich/reply_msg.py` and `rich/edit_msg.py`; the
-  shared names remain available through `messages/` for stable import paths.
+  handles commands and long-polling updates. Rich send, reply, edit and forward
+  helpers live in `rich/send_msg.py`, `rich/reply_msg.py`, `rich/edit_msg.py`
+  and `rich/forward_msg.py`; the shared names remain available through
+  `messages/` for stable import paths.
 
 ## Autonomous Engineering Loop
 
@@ -251,6 +254,7 @@ Current stack:
 │   │   │   │   ├── block.py        Payload assembly and block conversion
 │   │   │   │   ├── button.py       Rich buttons and inline-markup conversion
 │   │   │   │   ├── edit_msg.py     Safe-edit transport and callback helpers
+│   │   │   │   ├── forward_msg.py  Rich message forwarding transport
 │   │   │   │   ├── link.py         Links, mentions, and Telegram URL builders
 │   │   │   │   ├── reply_msg.py    Rich reply transport
 │   │   │   │   └── send_msg.py     Rich send transport
@@ -344,7 +348,7 @@ Format, lint, and type-check:
 
 ```bash
 uv run ruff format .
-uv run ruff check --fix .
+uv run ruff check .
 uv run pyright .
 ```
 
