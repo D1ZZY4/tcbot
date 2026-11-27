@@ -16,6 +16,7 @@ from tcbot.modules.helper.buttons import appeal_review_btn
 from tcbot.modules.helper.context import Ctx, chat_id_of, display_name
 from tcbot.modules.helper.handlers import ConversationHandler
 from tcbot.modules.helper.messages import (
+    forward_rich,
     message_link,
     reply_rich,
     safe_edit_message,
@@ -68,7 +69,7 @@ async def post_appeal(
     appeal_chat, appeal_thread = cfg.appeals
     appeal_msg_id: int | None = None
     try:
-        fwd = await msg.forward(appeal_chat, message_thread_id=appeal_thread)
+        fwd = await forward_rich(msg, appeal_chat, message_thread_id=appeal_thread)
         # * Kurigram returns a list for an album forward; a single appeal
         # * message is the only shape that yields a usable link id.
         if fwd is not None and not isinstance(fwd, list):

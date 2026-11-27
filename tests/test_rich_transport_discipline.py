@@ -38,3 +38,25 @@ def test_no_style_passthrough_calls_in_production() -> None:
             if _STYLE_CALL.search(line):
                 offenders.append(f"{path.name}:{lineno}: {line.strip()}")
     assert not offenders, "style() passthrough calls: " + ", ".join(offenders)
+
+
+# * Every message a user sees must travel through rich/send_msg.py,
+# * rich/reply_msg.py, or rich/edit_msg.py. A module that reaches into a
+# * low-level send silently abandons rich buttons and rich blocks.
+_RAW_TRANSPORT = re.compile(
+    r"\.(?:send_message|reply_text|edit_text|edit_message_text|edit_message_caption|"
+    r"send_photo|send_video|send_document|send_animation|send_media_group|"
+    r"send_voice|send_audio|send_sticker|forward)\s*\("
+)
+_TRANSPORT_OWNERS = frozenset({"send_msg.py", "edit_msg.py", "forward_msg.py"})
+
+
+def test_no_raw_message_transport_calls_outside_rich_owners() -> None:
+    offenders: list[str] = []
+    for path in sorted(_SOURCE.rglob("*.py")):
+        if path.name in _TRANSPORT_OWNERS and path.parent.name == "rich":
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if _RAW_TRANSPORT.search(line):
+                offenders.append(f"{path}:{lineno}: {line.strip()}")
+    assert not offenders, "raw message transports: " + ", ".join(offenders)

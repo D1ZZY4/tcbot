@@ -18,7 +18,8 @@ from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import answer_and_edit, reply_rich
 from tcbot.modules.helper.rich.block import blocks
 from tcbot.modules.helper.rich.edit_msg import callback_text_of
-from tcbot.utils.i18n import Safe, bold, code, divider, esc, heading, quote, t
+from tcbot.modules.helper.rich.table import table, table_cell
+from tcbot.utils.i18n import Safe, bold, code, divider, esc, quote, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -101,16 +102,21 @@ def _module_map_for_locale(
 
 def _help_index_text(botname: str, locale: str | None = None) -> str:
     """Build the help index header for the given plain-text bot display name."""
-    # * Title renders plain then heads outside: the engine would double
-    # * escape the name if it escaped first, and plain alone would leave
-    # * a markup-bearing bot name unescaped. heading() escapes exactly once.
-    return t(
-        "help.index.body",
-        locale,
-        title=Safe(heading(t("help.index.title", locale, botname=botname, plain=True))),
-        divider=Safe(divider()),
-        quote=Safe(quote(esc(t("help.index.guidance", locale, plain=True)))),
+    title = table(
+        [],
+        [
+            [
+                table_cell(
+                    bold(t("help.index.title", locale, botname=botname, plain=True)),
+                    align="center",
+                    raw=True,
+                )
+            ]
+        ],
+        bordered=False,
     )
+    guide = quote(esc(t("help.index.guidance", locale, plain=True)))
+    return "\n".join([title, divider(), guide])
 
 
 # ──────────────────────── Shared Renderers ──────────────────────── #
@@ -131,13 +137,20 @@ def _section_buttons(
 
 def _module_text(name: str, overview: str, locale: str | None = None) -> str:
     """Compose the module-overview rich body."""
-    return t(
-        "help.module.body",
-        locale,
-        title=Safe(heading(t("help.module.title", locale, name=name, plain=True))),
-        divider=Safe(divider()),
-        overview=Safe(blocks(overview)),
+    title = table(
+        [],
+        [
+            [
+                table_cell(
+                    bold(t("help.module.title", locale, name=name, plain=True)),
+                    align="center",
+                    raw=True,
+                )
+            ]
+        ],
+        bordered=False,
     )
+    return "\n".join([title, divider(), blocks(overview)])
 
 
 # ──────────────────────── Command Handlers ──────────────────────── #
@@ -295,7 +308,7 @@ async def _show_section(
         await answer_and_edit(
             q,
             t("help.error.topic_not_found", locale, plain=False),
-            reply_markup=buttons.back_to_module_btn(back_module_cb, locale),
+            reply_markup=buttons.back_to_module_btn(back_module_cb, locale, close=True),
         )
         return
 
@@ -304,27 +317,49 @@ async def _show_section(
         await answer_and_edit(
             q,
             t("help.error.section_not_found", locale, plain=False),
-            reply_markup=buttons.back_to_module_btn(back_module_cb, locale),
+            reply_markup=buttons.back_to_module_btn(back_module_cb, locale, close=True),
         )
         return
 
     label, section_content = sections[idx]
-    body = t(
-        "help.section.body",
-        locale,
-        title=Safe(bold(f"{name} ➛ {label}")),
-        divider=Safe(divider()),
-        list=Safe(
+    title = table(
+        [],
+        [
+            [
+                table_cell(
+                    bold(
+                        t(
+                            "help.section.title",
+                            locale,
+                            name=name,
+                            label=label,
+                            plain=True,
+                        )
+                    ),
+                    align="center",
+                    raw=True,
+                )
+            ]
+        ],
+        bordered=False,
+    )
+    body = "\n".join(
+        [
+            title,
+            divider(),
             blocks(
                 section_content,
+                table_header=False,
                 command_header=t("common.help.command", locale),
                 alias_header=t("common.help.alias", locale),
                 detail_header=t("common.help.details", locale),
-            )
-        ),
+            ),
+        ]
     )
     await answer_and_edit(
-        q, body, reply_markup=buttons.back_to_module_btn(back_module_cb, locale)
+        q,
+        body,
+        reply_markup=buttons.back_to_module_btn(back_module_cb, locale, close=True),
     )
 
 

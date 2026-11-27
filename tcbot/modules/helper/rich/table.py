@@ -131,7 +131,9 @@ def table(
     if headers:
         parts.append("<tr>" + "".join(render(h, "th") for h in headers) + "</tr>")
     parts.extend(
-        "<tr>" + "".join(render(value, "td") for value in row) + "</tr>" for row in rows
+        "<tr>" + "".join(render(value, "td") for value in row) + "</tr>"
+        for row in rows
+        if row
     )
     parts.append("</table>")
     return "".join(parts)

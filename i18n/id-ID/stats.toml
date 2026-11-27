@@ -47,18 +47,22 @@ users = "Pengguna"
 [main]
 title = "{community} *Statistik*"
 owner_unset = "Belum diatur"
-degraded = "Sebagian angka gagal dimuat; total di atas mungkin tidak lengkap."
+degraded = "Sebagian angka gagal dimuat; nilai yang terpengaruh ditandai tidak tersedia."
+unavailable = "Tidak tersedia"
+owner_unavailable = "Tidak dapat diverifikasi"
 
-# Tabel ringkasan dua kolom. Nilainya dibangun di Python dan disisipkan mentah.
+[main.breakdown]
+admin = "Admin"
+developer = "Dev"
+moderator = "Moderator"
+
+# Baris ringkasan dua kolom. Nilainya dibangun di Python dan disisipkan mentah.
 [main.table]
-metric = "Metrik"
-value = "Nilai"
 owner = "Owner"
 staff = "Staf"
 users = "Pengguna terlacak"
 bans = "Ban aktif"
-chats = "Chat terhubung"
-staff_value = "{n} (Admin {admins}, Dev {devs}, Moderator {moderators})"
+chats = "Chat Terhubung"
 
 # Header kolom untuk tampilan tabel. Teks polos, tanpa placeholder.
 [table]

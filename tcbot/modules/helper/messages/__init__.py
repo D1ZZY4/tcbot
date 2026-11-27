@@ -58,6 +58,7 @@ from tcbot.modules.helper.rich.edit_msg import (
     safe_edit_message,
     send_log,
 )
+from tcbot.modules.helper.rich.forward_msg import forward_rich
 from tcbot.modules.helper.rich.link import (
     appeal_deep_link,
     chat_id_to_link_id,
@@ -91,6 +92,7 @@ __all__ = [
     "chat_id_to_link_id",
     "clear_markup_cb",
     "demoted",
+    "forward_rich",
     "group_bot_removed_log",
     "group_connected_log",
     "group_connection_rejected_log",

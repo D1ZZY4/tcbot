@@ -47,18 +47,22 @@ users = "Users"
 [main]
 title = "{community} *Stats*"
 owner_unset = "Not set"
-degraded = "Some numbers could not be loaded; totals above may be incomplete."
+degraded = "Some numbers could not be loaded; affected values are marked unavailable."
+unavailable = "Unavailable"
+owner_unavailable = "Could not be verified"
 
-# Two-column overview table. Values are built in Python and inserted raw.
+[main.breakdown]
+admin = "Admin"
+developer = "Dev"
+moderator = "Moderator"
+
+# Two-column overview rows. Values are built in Python and inserted raw.
 [main.table]
-metric = "Metric"
-value = "Value"
 owner = "Owner"
 staff = "Staff"
 users = "Users tracked"
 bans = "Active bans"
-chats = "Connected chats"
-staff_value = "{n} (Admins {admins}, Devs {devs}, Moderators {moderators})"
+chats = "Connected Chats"
 
 # Column headers shared by the table views. Plain text, no placeholders.
 [table]

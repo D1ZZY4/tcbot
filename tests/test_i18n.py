@@ -61,13 +61,10 @@ from tcbot.utils.i18n import (
     bold,
     code,
     display_name,
-    divider,
     esc,
-    heading,
     is_known_locale,
     load_catalog,
     pre,
-    quote,
     resolve_locale,
     t,
 )
@@ -706,12 +703,10 @@ def test_language_help_golden() -> None:
 
 
 def test_help_index_golden() -> None:
-    assert helpmod._help_index_text("TestBot") == t(
-        "help.index.body",
-        title=Safe(heading("TestBot Help")),
-        divider=Safe(divider()),
-        quote=Safe(quote(t("help.index.guidance", plain=True))),
-    )
+    rendered = helpmod._help_index_text("TestBot")
+    assert '<td align="center"><b>TestBot Help</b></td>' in rendered
+    assert "<blockquote>" in rendered
+    assert "Select a module" in rendered
 
 
 async def test_user_locale_l1_serves_hits(

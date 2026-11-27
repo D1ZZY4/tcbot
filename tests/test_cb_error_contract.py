@@ -9,16 +9,10 @@ drops the keyboard so the button cannot be pressed again and it never lets a
 failed edit escape into the handler. Its render mode is the part that is easy
 to get wrong, because the mode has to match how the notice text was produced.
 
-The text source decides the mode:
-
-- ``t(key, locale, plain=True)`` and ``replies.x(locale, plain=True)`` return
-  raw text and must be sent with ``parse_mode=None``.
-- everything else (``t(key, locale)``, ``identity.refuse_message``) returns
-  MarkdownV2-ready text and must be sent as MarkdownV2.
-
-Sending raw text as MarkdownV2 makes Telegram reject the whole edit, so the
-notice never reaches the user. Sending MarkdownV2 as raw text shows the
-escape backslashes. Both are silent failures, so the pairing is pinned here.
+All notices travel in a rich message payload through the rich edit transport.
+``plain=True`` only controls how the catalog renders its text; the transport
+never selects a parse mode because rich messages own formatting. A refusal is
+terminal, so the keyboard on the edited card is removed.
 """
 
 from __future__ import annotations
@@ -118,8 +112,9 @@ def test_cb_error_edit_clears_the_keyboard_and_swallows_failures() -> None:
     asyncio.run(cb_error_edit(_FakeQuery(), "nope", log_label="test"))  # type: ignore[arg-type]
 
     assert len(calls) == 1
-    # * Refusals ship as rich text only; no native inline keyboard is sent.
-    assert "reply_markup" not in calls[0]
+    # * Refusals are terminal: an explicitly empty keyboard removes the buttons.
+    markup = calls[0].get("reply_markup")
+    assert getattr(markup, "inline_keyboard", None) == []
     assert "parse_mode" not in calls[0]
 
 

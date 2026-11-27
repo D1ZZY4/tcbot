@@ -235,6 +235,13 @@ def test_button_styles_are_case_insensitive_and_link_stays_callback_only() -> No
         rich_buttons.button("X", url="https://x", style="LINK")
 
 
+def test_unknown_button_style_is_dropped() -> None:
+    """An unsupported style must not make Telegram reject the whole message."""
+    assert rich_buttons.button("Go", data="go", style="purple") == (
+        '<tg-button type="callback_data" data="go">Go</tg-button>'
+    )
+
+
 def test_native_only_actions_stay_inline_for_both_markup_shapes() -> None:
     """A profile or payment cell must not become a dead rich button."""
     native = {"inline_keyboard": [[{"text": "Pay", "pay": True}]]}
@@ -353,3 +360,43 @@ def test_help_command_section_uses_a_real_table() -> None:
     assert rendered.count("<tr>") == 7
     assert "<th>Command</th><th>Alias</th>" in rendered
     assert "<li>" not in rendered
+
+
+def test_blocks_can_omit_the_command_header_row() -> None:
+    """Read-only panels use a title and no column header row."""
+    html = rich_text.blocks(
+        "<code>/rules</code> see rules\n<code>/tcrules</code> edit rules",
+        table_header=False,
+    )
+    assert "<th>" not in html
+    assert html.count("<tr>") == 2
+    assert "<td><code>/rules</code></td>" in html
+
+
+def test_centered_title_uses_a_borderless_one_cell_table() -> None:
+    rendered = rich_table.table(
+        [],
+        [[rich_table.table_cell("<b>Stats</b>", align="center", raw=True)]],
+        bordered=False,
+    )
+    assert rendered == ('<table><tr><td align="center"><b>Stats</b></td></tr></table>')
+
+
+def test_empty_data_rows_are_not_emitted() -> None:
+    assert rich_table.table([], [[]]) == "<table bordered></table>"
+    assert rich_table.table([], [[], ["a"]]) == (
+        "<table bordered><tr><td>a</td></tr></table>"
+    )
+
+
+def test_blocks_preserves_a_standalone_anchor_block() -> None:
+    text = '<a name="chapter-1"></a>\n- first\n- second'
+    assert rich_text.blocks(text) == text
+
+
+def test_nested_login_url_bot_username_stays_inline() -> None:
+    cell = {
+        "text": "Login",
+        "login_url": {"url": "https://x/login", "bot_username": "other_bot"},
+    }
+    assert rich_buttons.buttons_from_markup({"inline_keyboard": [[cell]]}) is None

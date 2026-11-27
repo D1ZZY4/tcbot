@@ -72,14 +72,18 @@ async def _update_or_send_log(
     """Edit the existing appeal log message, or post a new one as fallback."""
     if msg_id:
         try:
-            await safe_edit_message(bot, lc, msg_id, text)
-            return
+            # * A False result means the stored log message is gone. Treating
+            # * it as success used to leave a decision with no audit record.
+            if await safe_edit_message(bot, lc, msg_id, text):
+                return
         except Exception as exc:
             log.warning("Could not edit appeal submitted log: %s", exc)
     try:
         await send_log(bot, text)
-    except Exception as exc:
-        log.debug("Could not send appeal submitted log: %s", exc)
+    except Exception:
+        # ! CRITICAL: a missing audit record must reach LOGS_ERRORS; DEBUG is
+        # ! below the error reporter's threshold and hides the failed decision.
+        log.exception("Could not send appeal submitted log")
 
 
 async def _answer_review(

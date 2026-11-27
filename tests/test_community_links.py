@@ -23,8 +23,9 @@ def _clear_link_cache() -> Any:
     community_links.clear()
 
 
-def _bot(chat: Any, *, fail: bool = False) -> Client:
+def _bot(chat: Any, *, fail: bool = False, invite: str | None = None) -> Client:
     calls: list[int] = []
+    exports: list[int] = []
 
     async def _get_chat(chat_id: int) -> Any:
         calls.append(chat_id)
@@ -32,8 +33,15 @@ def _bot(chat: Any, *, fail: bool = False) -> Client:
             raise RuntimeError("lookup down")
         return chat
 
-    result = SimpleNamespace(get_chat=_get_chat)
+    async def _export(chat_id: int) -> str:
+        exports.append(chat_id)
+        if invite is None:
+            raise RuntimeError("export refused")
+        return invite
+
+    result = SimpleNamespace(get_chat=_get_chat, export_chat_invite_link=_export)
     result.calls = calls  # type: ignore[attr-defined]
+    result.exports = exports  # type: ignore[attr-defined]
     return cast("Client", result)
 
 
@@ -63,6 +71,38 @@ def test_a_failed_lookup_omits_the_button_without_raising() -> None:
     bot = _bot(None, fail=True)
 
     assert asyncio.run(community_links.resolve(cast("Any", bot), -400)) is None
+
+
+def test_a_private_chat_gets_the_bots_own_invite_link() -> None:
+    """A bot cannot use another admin's link, so it generates its own."""
+    bot = _bot(
+        SimpleNamespace(username=None, invite_link=None),
+        invite="https://t.me/+generated",
+    )
+
+    assert asyncio.run(community_links.resolve(cast("Any", bot), -800)) == (
+        "https://t.me/+generated"
+    )
+    assert bot.exports == [-800]  # type: ignore[attr-defined]
+
+
+def test_an_exported_invite_link_is_cached_without_repeat_export() -> None:
+    bot = _bot(
+        SimpleNamespace(username=None, invite_link=None),
+        invite="https://t.me/+generated",
+    )
+
+    asyncio.run(community_links.resolve(cast("Any", bot), -900))
+    asyncio.run(community_links.resolve(cast("Any", bot), -900))
+
+    assert bot.exports == [-900]  # type: ignore[attr-defined]
+
+
+def test_a_refused_invite_export_still_omits_the_button() -> None:
+    bot = _bot(SimpleNamespace(username=None, invite_link=None))
+
+    assert asyncio.run(community_links.resolve(cast("Any", bot), -1000)) is None
+    assert bot.exports == [-1000]  # type: ignore[attr-defined]
 
 
 def test_a_cached_link_skips_the_second_telegram_lookup() -> None:

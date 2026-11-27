@@ -23,6 +23,10 @@ from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 log = get_logger(__name__)
 
 _CACHE_TTL_S: float = 300.0
+# * An invite link the bot generated stays valid until it generates another
+# * one, so it can be cached far longer than a username lookup. Re-exporting
+# * every five minutes would revoke links members already received.
+_EXPORTED_LINK_TTL_S: float = 3600.0
 # * One lookup budget for every Telegram get_chat call made while rendering
 # * a community menu link.
 _LOOKUP_TIMEOUT_S: float = TELEGRAM_LOOKUP_TIMEOUT
@@ -117,9 +121,25 @@ async def resolve(bot: Client, chat_id: int) -> str | None:
             if username
             else getattr(chat, "invite_link", None)
         )
+        ttl = _CACHE_TTL_S
+        if not isinstance(value, str) or not value:
+            # * A bot cannot use an invite link created by another admin, and a
+            # * private chat often has no visible link at all. Kurigram's
+            # * documented bot workflow is to generate its own primary link;
+            # * get_chat then exposes it on later lookups. Without this the
+            # * community menu silently drops every destination button.
+            try:
+                async with asyncio.timeout(_LOOKUP_TIMEOUT_S):
+                    value = await bot.export_chat_invite_link(chat_id)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                log.debug("Invite-link export failed for %d: %s", chat_id, exc)
+                return None
+            ttl = _EXPORTED_LINK_TTL_S
         if not isinstance(value, str) or not value:
             return None
-        _cache[chat_id] = (value, time.monotonic() + _CACHE_TTL_S)
+        _cache[chat_id] = (value, time.monotonic() + ttl)
         return value
 
 

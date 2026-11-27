@@ -28,6 +28,9 @@ _BULLET_LINE = re.compile(r"^[-*]\s+(.*)$")
 _ORDERED_LINE = re.compile(r"^\d+\.\s+(.*)$")
 _BLOCK_TAGS = (
     "<p>",
+    # * Bot API RichBlockAnchor: a standalone <a name> is a block, not a
+    # * paragraph child. Other child tags are covered by their parent tags.
+    "<a name=",
     "<pre",
     "<ul",
     "<ol",
@@ -135,11 +138,15 @@ def blocks(
     alias_header: str = "Alias",
     detail_header: str = "Details",
     caption: str | None = None,
+    table_header: bool = True,
 ) -> str:
     """Render a newline-separated rich fragment as rich block markup.
 
     Command lines become a two-column table, ``- `` lines a rich bullet list,
     ``1. `` lines an ordered list, and every other line its own paragraph.
+    ``table_header=False`` omits the column header row for read-only views
+    that already carry a title; the default keeps every existing caller's
+    output unchanged.
     """
     if any(tag in text for tag in _BLOCK_TAGS):
         return text
@@ -173,9 +180,12 @@ def blocks(
         header = alias_header if any_alias else detail_header
         cap = f"<caption>{caption}</caption>" if caption else ""
         rows = "".join(f"<tr><td>{a}</td><td>{b}</td></tr>" for a, b in commands)
-        parts.append(
-            f"<table bordered>{cap}<tr><th>{command_header}</th><th>{header}</th></tr>{rows}</table>"
+        head = (
+            f"<tr><th>{command_header}</th><th>{header}</th></tr>"
+            if table_header
+            else ""
         )
+        parts.append(f"<table bordered>{cap}{head}{rows}</table>")
         commands.clear()
         any_alias = False
 

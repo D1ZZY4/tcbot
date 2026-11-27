@@ -25,8 +25,9 @@ from tcbot.modules.helper.buttons import (
 from tcbot.modules.helper.context import Ctx, chat_id_of
 from tcbot.modules.helper.rich.block import blocks
 from tcbot.modules.helper.rich.button import is_mentionable_user_id
+from tcbot.modules.helper.rich.formats import footer
 from tcbot.modules.helper.rich.list import bullet_list
-from tcbot.modules.helper.rich.table import table
+from tcbot.modules.helper.rich.table import table, table_cell
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, code, divider, esc, t, user_ref
 from tcbot.utils.logger import get_logger
@@ -100,40 +101,57 @@ class OverviewViews:
                 *viewer_reads,
             )
         )
-        degraded = any(
-            isinstance(r, BaseException)
-            for r in (
-                owner_id,
-                admin_count,
-                developer_count,
-                moderator_count,
-                ban_count,
-                group_count,
-                user_count,
+        core_results = (
+            owner_id,
+            admin_count,
+            developer_count,
+            moderator_count,
+            ban_count,
+            group_count,
+            user_count,
+        )
+        degraded = any(isinstance(r, BaseException) for r in core_results)
+        owner_failed = isinstance(owner_id, BaseException)
+        failed = tuple(isinstance(r, BaseException) for r in core_results[1:])
+        # * A failed read is not a zero. Keep the failure per field so the
+        # * panel can mark only the affected values instead of claiming the
+        # * federation has no owner, staff, users, bans, or groups.
+        owner_id = 0 if owner_failed else cast("int | None", owner_id)
+        admin_count = 0 if failed[0] else cast("int", admin_count)
+        developer_count = 0 if failed[1] else cast("int", developer_count)
+        moderator_count = 0 if failed[2] else cast("int", moderator_count)
+        ban_count = 0 if failed[3] else cast("int", ban_count)
+        group_count = 0 if failed[4] else cast("int", group_count)
+        user_count = 0 if failed[5] else cast("int", user_count)
+
+        def _label(key: str) -> Safe:
+            """Bold a catalog label for the detail tables."""
+            return Safe(bold(t(key, locale, plain=True)))
+
+        def _number(value: int, *, unavailable: bool) -> str:
+            """Escape the value; only the label is emphasized."""
+            return (
+                esc(t("stats.main.unavailable", locale, plain=True))
+                if unavailable
+                else esc(str(value))
             )
-        )
-        owner_id = (
-            0 if isinstance(owner_id, BaseException) else cast("int | None", owner_id)
-        )
-        admin_count = (
-            0 if isinstance(admin_count, BaseException) else cast("int", admin_count)
-        )
-        developer_count = (
-            0
-            if isinstance(developer_count, BaseException)
-            else cast("int", developer_count)
-        )
-        moderator_count = (
-            0
-            if isinstance(moderator_count, BaseException)
-            else cast("int", moderator_count)
-        )
-        if isinstance(ban_count, BaseException):
-            ban_count = 0
-        if isinstance(group_count, BaseException):
-            group_count = 0
-        if isinstance(user_count, BaseException):
-            user_count = 0
+
+        def _section_title(key: str) -> str:
+            """Center a bold section title with the existing table cell fields."""
+            return table(
+                [],
+                [
+                    [
+                        table_cell(
+                            bold(t(key, locale, plain=True)),
+                            align="center",
+                            raw=True,
+                        )
+                    ]
+                ],
+                bordered=False,
+            )
+
         show_users = False
         show_staff = False
         if viewer_reads:
@@ -148,7 +166,9 @@ class OverviewViews:
             show_staff = show_users or db.users_roles.role_rank(
                 role_check
             ) >= db.users_roles.role_rank("moderator")
-        if owner_id:
+        if owner_failed:
+            owner_line = Safe(t("stats.main.owner_unavailable", locale))
+        elif owner_id:
             owner_id_int = cast("int", owner_id)
             try:
                 owner_fname, owner_uname = await db.users_cache.get_user_mention_data(
@@ -164,41 +184,83 @@ class OverviewViews:
             owner_line = Safe(user_ref(owner_id_int, owner_fname, owner_uname))
         else:
             owner_line = Safe(t("stats.main.owner_unset", locale))
-        staff_total = (
-            (1 if owner_id else 0) + admin_count + developer_count + moderator_count
+        title = table(
+            [],
+            [
+                [
+                    table_cell(
+                        t("stats.main.title", locale, community=cfg.community_name),
+                        align="center",
+                        raw=True,
+                    )
+                ]
+            ],
+            bordered=False,
         )
-        rows = [
-            [t("stats.main.table.owner", locale), owner_line],
+        owner_table = table(
+            [],
+            [[t("stats.main.table.owner", locale), owner_line]],
+            raw_cells=True,
+            compact=True,
+            striped=True,
+        )
+        staff_rows = [
             [
-                t("stats.main.table.staff", locale),
-                t(
-                    "stats.main.table.staff_value",
-                    locale,
-                    n=Safe(bold(str(staff_total))),
-                    admins=admin_count,
-                    devs=developer_count,
-                    moderators=moderator_count,
-                ),
+                _label("stats.main.breakdown.admin"),
+                _number(admin_count, unavailable=failed[0]),
             ],
             [
-                t("stats.main.table.users", locale),
-                Safe(bold(str(user_count))),
+                _label("stats.main.breakdown.developer"),
+                _number(developer_count, unavailable=failed[1]),
             ],
             [
-                t("stats.main.table.bans", locale),
-                Safe(bold(str(ban_count))),
-            ],
-            [
-                t("stats.main.table.chats", locale),
-                Safe(bold(str(group_count))),
+                _label("stats.main.breakdown.moderator"),
+                _number(moderator_count, unavailable=failed[2]),
             ],
         ]
-        text = (
-            f"{t('stats.main.title', locale, community=Safe(bold(cfg.community_name)))}\n"
-            f"{table([t('stats.main.table.metric', locale), t('stats.main.table.value', locale)], rows, raw_cells=True, compact=True, striped=True)}"
+        staff_table = table(
+            [],
+            staff_rows,
+            raw_cells=True,
+            compact=True,
+            striped=True,
         )
+        drill_rows = [
+            [
+                _label("stats.main.table.users"),
+                _number(user_count, unavailable=failed[5]),
+            ],
+            [
+                _label("stats.main.table.bans"),
+                _number(ban_count, unavailable=failed[3]),
+            ],
+            [
+                _label("stats.main.table.chats"),
+                _number(group_count, unavailable=failed[4]),
+            ],
+        ]
+        drill_table = table(
+            [],
+            drill_rows,
+            raw_cells=True,
+            compact=True,
+            striped=True,
+        )
+        parts = [
+            title,
+            owner_table,
+            divider(),
+            _section_title("stats.main.table.staff"),
+            staff_table,
+            divider(),
+            _section_title("stats.help.drills.title"),
+            drill_table,
+        ]
         if degraded:
-            text += f"\n{t('stats.main.degraded', locale)}"
+            # * A real footer block, not a bare line after a divider: the
+            # * transport would otherwise add a second rule below the notice.
+            parts.append(footer(t("stats.main.degraded", locale, plain=True)))
+        text = "\n".join(parts)
         return blocks(text), stats_main_btn(
             show_users=show_users, show_staff=show_staff, locale=locale
         )

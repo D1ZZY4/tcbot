@@ -84,6 +84,11 @@ def _resolved_style(style: str | None) -> str:
 
 def _style(style: str | None) -> str:
     resolved = _resolved_style(style)
+    # * Telegram accepts only the four documented style names. An unknown
+    # * value would fail parsing for the entire rich message, so a direct
+    # * builder call drops it exactly like the keyboard-conversion path does.
+    if resolved and resolved not in _RICH_BUTTON_STYLES:
+        resolved = ""
     return f' style="{esc(resolved)}"' if resolved else ""
 
 
@@ -303,8 +308,14 @@ def button_rows(rows: list[list[str]], *, align: str | None = None) -> str:
 def _has_native_only_action(cell: Any) -> bool:
     """Return True when a cell carries an action rich HTML cannot express."""
     if isinstance(cell, dict):
-        return any(cell.get(name) is not None for name in _NATIVE_ONLY_FIELDS)
-    return any(getattr(cell, name, None) is not None for name in _NATIVE_ONLY_FIELDS)
+        if any(cell.get(name) is not None for name in _NATIVE_ONLY_FIELDS):
+            return True
+        login = cell.get("login_url")
+        return isinstance(login, dict) and login.get("bot_username") is not None
+    if any(getattr(cell, name, None) is not None for name in _NATIVE_ONLY_FIELDS):
+        return True
+    login = getattr(cell, "login_url", None)
+    return login is not None and getattr(login, "bot_username", None) is not None
 
 
 def _markup_dict(reply_markup: Any | None) -> dict[str, Any] | None:

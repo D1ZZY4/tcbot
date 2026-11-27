@@ -11,6 +11,7 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from tcbot.modules.helper.buttons.common import (
     _build_topic_rows,
+    back_close_row,
     back_markup,
     back_row,
     close_btn,
@@ -59,9 +60,15 @@ def module_help_btn(
 
 
 def back_to_module_btn(
-    module_callback: str, locale: str | None = None
+    module_callback: str, locale: str | None = None, *, close: bool = False
 ) -> InlineKeyboardMarkup:
-    """Single Back button returning to the module help view."""
+    """Back to the module help view, optionally with Close.
+
+    The help section panel is read-only, so it opts into Close; other callers
+    keep the original Back-only row and their existing keyboard contract.
+    """
+    if close:
+        return InlineKeyboardMarkup([back_close_row(module_callback, locale)])
     return back_markup(module_callback, locale)
 
 

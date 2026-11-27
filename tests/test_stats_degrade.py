@@ -11,6 +11,8 @@ from typing import Any
 
 import pytest
 
+from tcbot import database as db
+from tcbot.modules.helper.pipelines.stats_panels import Stats
 from tcbot.modules.helper.rich.edit_msg import ack_and_render
 
 
@@ -57,3 +59,50 @@ async def test_cancellation_is_never_rendered_as_an_error_card() -> None:
 
     assert len(q.answers) == 1
     assert q.edits == []
+
+
+@pytest.mark.asyncio
+async def test_a_failed_count_is_marked_unavailable_not_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed read must not be presented as a real zero or a missing Owner."""
+
+    async def _owner() -> int:
+        return 7
+
+    async def _admins() -> int:
+        return 2
+
+    async def _role_count(role: str) -> int:
+        if role == "developer":
+            raise RuntimeError("database unavailable")
+        return 1
+
+    async def _bans() -> int:
+        return 4
+
+    async def _groups() -> int:
+        return 3
+
+    async def _users() -> int:
+        return 100
+
+    async def _mention(uid: int) -> tuple[str, str | None]:
+        return "Owner", None
+
+    monkeypatch.setattr(db.users_roles, "get_owner_id", _owner)
+    monkeypatch.setattr(db.users_roles, "admin_count", _admins)
+    monkeypatch.setattr(db.users_roles, "role_count", _role_count)
+    monkeypatch.setattr(db.bans_db, "active_ban_count", _bans)
+    monkeypatch.setattr(db.groups_db, "active_group_count", _groups)
+    monkeypatch.setattr(db.users_cache, "total_users", _users)
+    monkeypatch.setattr(db.users_cache, "get_user_mention_data", _mention)
+
+    text, _btn = await Stats.main(locale="en-US")
+
+    assert "Unavailable" in text
+    assert "<td>2</td>" in text
+    assert "<td>4</td>" in text
+    assert "<footer>" in text
+    assert "Could not be verified" not in text
+    assert "totals above" not in text

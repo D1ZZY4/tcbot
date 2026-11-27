@@ -1,20 +1,14 @@
 # Help index prose for help.py itself: the topic-list header.
-# Structure stays in help.py; only prose lives here.
-# Placeholders: {title} carries pre-formatted heading markup from code,
-# {divider} is a rich rule and {quote} is a plain block quotation.
+# Structure stays in help.py; only prose lives here. Titles are centered by
+# the renderer, so templates carry plain text without markup.
 
 [index]
 title = "{botname} Help"
-body = """{title}
-{divider}
-{quote}"""
 guidance = "Select a module below ↴ to read its overview and commands, or use /help module to jump straight to a topic."
 
-# Runtime strings (help.py). [error] sends plain; [note]/[module]/
-# [section]/[not_found] render as rich HTML. Placeholders: {title}/
-# {prefixes}/{query}/{hint} pre-formatted fragments, {overview}/
-# {content} pre-rendered help prose, {divider} a rich rule and
-# {list} a rich bulleted block.
+# Runtime strings (help.py). [error] sends plain; [module]/[section]/
+# [not_found] render as rich HTML. Titles are composed in Python and
+# centered there; {query}/{hint} are pre-formatted fragments.
 
 [error]
 topic_not_found = "Topic not found."
@@ -23,15 +17,9 @@ invalid_section = "Invalid section."
 
 [module]
 title = "Help for {name}"
-body = """{title}
-{divider}
-{overview}
-{divider}"""
 
 [section]
-body = """{title}
-{divider}
-{list}"""
+title = "{name} ➛ {label}"
 
 [not_found]
 body = "Module {query} not found.{hint}"

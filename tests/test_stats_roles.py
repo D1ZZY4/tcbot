@@ -90,7 +90,10 @@ def test_stats_main_uses_role_counts_not_docs(monkeypatch: pytest.MonkeyPatch) -
     text, _btn = asyncio.run(Stats.main(viewer_id=1))
 
     assert called_all_by_role == []
-    assert "<th>Metric</th><th>Value</th>" in text
-    assert "<td>Staff</td>" in text
-    assert "<b>10</b>" in text
-    assert "Devs 2, Moderators 3" in text
+    assert 'align="center"' in text
+    assert "<th>" not in text
+    assert "<td><b>Admin</b></td><td>5</td>" in text
+    assert "<td><b>Dev</b></td><td>2</td>" in text
+    assert "<td><b>Moderator</b></td><td>3</td>" in text
+    assert "<td><b>Users tracked</b></td><td>100</td>" in text
+    assert "<td><b>Connected Chats</b></td><td>2</td>" in text

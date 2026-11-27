@@ -16,6 +16,7 @@ from tcbot.modules.helper.context import Ctx, chat_id_of, display_name
 from tcbot.modules.helper.handlers import MessageHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
+    forward_rich,
     replies,
     reply_rich,
     reply_rich_result,
@@ -146,7 +147,7 @@ async def cmd_broadcast(ctx: Ctx) -> None:
         if chat_id is None:
             return
         if has_reply and msg.reply_to_message:
-            await msg.reply_to_message.forward(chat_id)
+            await forward_rich(msg.reply_to_message, chat_id)
         elif broadcast_text:
             # * Staff text is untrusted, so escape it before the rich transport;
             # * the rendered HTML then shows the literal text in every group.

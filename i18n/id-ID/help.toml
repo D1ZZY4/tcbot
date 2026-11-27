@@ -1,20 +1,14 @@
-# Help index prose for help.py itself: the topic-list header.
-# Structure stays in help.py; only prose lives here.
-# Placeholders: {title} carries pre-formatted heading markup from code,
-# {divider} is a rich rule and {quote} is a plain block quotation.
+# Prosa indeks bantuan untuk help.py: header daftar topik.
+# Struktur tetap di help.py; hanya prosa di sini. Judul ditengahkan oleh
+# renderer, jadi template memuat teks polos tanpa markup.
 
 [index]
 title = "Bantuan {botname}"
-body = """{title}
-{divider}
-{quote}"""
 guidance = "Pilih modul di bawah ↴ untuk membaca ringkasan dan perintahnya, atau pakai /help module untuk langsung ke topik."
 
-# Runtime strings (help.py). [error] sends plain; [note]/[module]/
-# [section]/[not_found] render as rich HTML. Placeholders: {title}/
-# {prefixes}/{query}/{hint} pre-formatted fragments, {overview}/
-# {content} pre-rendered help prose, {divider} a rich rule and
-# {list} a rich bulleted block.
+# Runtime strings (help.py). [error] dikirim polos; [module]/[section]/
+# [not_found] dirender sebagai rich HTML. Judul disusun di Python dan
+# ditengahkan di sana; {query}/{hint} adalah fragmen yang sudah terformat.
 
 [error]
 topic_not_found = "Topik tidak ditemukan."
@@ -23,15 +17,9 @@ invalid_section = "Bagian tidak valid."
 
 [module]
 title = "Bantuan untuk {name}"
-body = """{title}
-{divider}
-{overview}
-{divider}"""
 
 [section]
-body = """{title}
-{divider}
-{list}"""
+title = "{name} ➛ {label}"
 
 [not_found]
 body = "Modul {query} tidak ditemukan.{hint}"

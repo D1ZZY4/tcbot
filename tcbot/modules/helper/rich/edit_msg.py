@@ -107,6 +107,10 @@ async def safe_edit(
     extra: dict[str, Any] = {}
     if fallback is not None:
         extra["reply_markup"] = fallback
+    elif "reply_markup" in kwargs and markup is None:
+        # * Omitting the key leaves the old keyboard; passing it as None is the
+        # * caller's explicit request to remove it.
+        extra["reply_markup"] = InlineKeyboardMarkup([])
     if clear_markup:
         extra["reply_markup"] = InlineKeyboardMarkup([])
     await _edit_via(
@@ -136,6 +140,8 @@ async def safe_edit_cb(
     extra: dict[str, Any] = {}
     if fallback is not None:
         extra["reply_markup"] = fallback
+    elif "reply_markup" in kwargs and markup is None:
+        extra["reply_markup"] = InlineKeyboardMarkup([])
     if clear_markup:
         extra["reply_markup"] = InlineKeyboardMarkup([])
     return await _edit_via(
@@ -169,6 +175,8 @@ async def safe_edit_message(
     extra: dict[str, Any] = {}
     if fallback is not None:
         extra["reply_markup"] = fallback
+    elif "reply_markup" in kwargs and markup is None:
+        extra["reply_markup"] = InlineKeyboardMarkup([])
     if clear_markup:
         extra["reply_markup"] = InlineKeyboardMarkup([])
     return await _edit_via(
@@ -320,10 +328,17 @@ async def cb_error_edit(
     parse_mode: Any = None,
     log_level: str = "warning",
 ) -> None:
-    """Replace a callback message with a notice and catch edit failures."""
+    """Replace a callback message with a terminal notice and clear its buttons."""
     _ = parse_mode
+    # * A refusal closes the prompt. Sending no markup leaves the old buttons
+    # * attached, so a decided card still looks actionable to the tapper.
     await safe_edit_cb(
-        q, text, log_level=log_level, log_label=log_label, catch_all=True
+        q,
+        text,
+        log_level=log_level,
+        log_label=log_label,
+        catch_all=True,
+        clear_markup=True,
     )
 
 
