@@ -248,11 +248,27 @@ def _owner_record_sent(fp: tuple[object, ...]) -> None:
 _MAX_CONTEXT_LEN: int = 120
 _TASK_ID_RE = re.compile(r"Task-\d+")
 _HEX_ADDR_RE = re.compile(r"0x[0-9a-fA-F]+")
+_UUID_RE = re.compile(
+    r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
+)
+_ISO_TS_RE = re.compile(
+    r"\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?\b"
+)
+_LONG_ID_RE = re.compile(r"(?<![\w.])[-]?\d{6,}\b")
 
 
 def _normalize_fp_text(text: str) -> str:
-    """Stabilize volatile tokens so recurring failures dedupe."""
-    return _HEX_ADDR_RE.sub("0x#", _TASK_ID_RE.sub("Task-#", text))
+    """Stabilize volatile tokens so recurring failures dedupe.
+
+    Order matters: task ids first, then UUIDs and timestamps, then long
+    decimal ids. Short codes (Telegram 401/403/420, SQL states) stay intact
+    so distinct refusals keep distinct fingerprints.
+    """
+    text = _TASK_ID_RE.sub("Task-#", text)
+    text = _UUID_RE.sub("#UUID", text)
+    text = _ISO_TS_RE.sub("#TS", text)
+    text = _HEX_ADDR_RE.sub("0x#", text)
+    return _LONG_ID_RE.sub("#ID", text)
 
 
 def _fingerprint_exc(exc: BaseException) -> tuple[object, ...]:
