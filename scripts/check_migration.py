@@ -48,12 +48,9 @@ from alembic.config import Config  # noqa: E402
 from alembic import command  # noqa: E402
 from tcbot.database.migrations import scoped_url  # noqa: E402
 
-# * The schema the check owns. The project uses three schemas and no
-# * more: ``public`` for the deployment, ``test`` for the integration
-# * tests, and ``development`` for a developer working against a shared
-# * server. The check runs in the development schema, and it drops that
-# * schema when it is done.
-CHECK_SCHEMA: str = "development"
+# * A disposable scratch schema owned by this script. ``development`` is a
+# * developer's working schema and must never be dropped by operator tooling.
+CHECK_SCHEMA: str = "tcbot_migration_check"
 
 # * The revision the legacy layout ends at. The community schema is the
 # * revision after it.
@@ -178,7 +175,7 @@ def _alembic_config(url: str) -> Config:
     config.set_main_option("script_location", str(_ROOT / "alembic"))
     config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
     # ! CRITICAL: env.py pins the last search_path option and falls back to
-    # ! public. Without this, the scoped URL's development path is overridden
+    # ! public. Without this, the scoped URL's scratch path is overridden
     # ! and the revisions migrate the deployment schema instead of the scratch
     # ! one this check owns.
     config.set_main_option("db_schema", CHECK_SCHEMA)

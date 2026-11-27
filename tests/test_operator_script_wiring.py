@@ -2,14 +2,23 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Operator scripts keep their scratch work out of the deployment schema."""
+"""Operator scripts keep their scratch work out of live schemas."""
 
 from __future__ import annotations
 
 import pytest
 
 from scripts.check_migration import CHECK_SCHEMA, _alembic_config
+from scripts.check_schema import CHECK_SCHEMA as INVARIANT_SCHEMA
 from scripts.dump_schema import _require_export, _validate_schema
+from scripts.print_guard_messages import PROBE_SCHEMA
+
+
+@pytest.mark.parametrize("schema", [CHECK_SCHEMA, INVARIANT_SCHEMA, PROBE_SCHEMA])
+def test_operator_scripts_use_disposable_scratch_schemas(schema: str) -> None:
+    """No operator script may rebuild or drop a developer's schema."""
+    assert schema.startswith("tcbot_")
+    assert schema != "development"
 
 
 def test_migration_check_pins_the_alembic_schema() -> None:

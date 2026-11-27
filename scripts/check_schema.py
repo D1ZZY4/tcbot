@@ -11,7 +11,7 @@ refused, a chat-scoped decision needs a connected group, an evidence
 batch only completes with every item, only the banned user may appeal,
 and the audit trail cannot be rewritten.
 
-The check builds the schema in the development schema of a server, runs
+The check builds the schema in a disposable scratch schema of a server, runs
 the statements that have to fail and the statements that have to
 succeed, and reports every invariant that did not hold.
 
@@ -46,11 +46,9 @@ from tcbot.database.base import metadata  # noqa: E402
 from tcbot.database.migrations import scoped_url  # noqa: E402
 from tcbot.database.schema import apply_schema, drop_schema  # noqa: E402
 
-# * The schema the check owns. The project uses three schemas and no
-# * more: ``public`` for the deployment, ``test`` for the integration
-# * tests, and ``development`` for a developer working against a shared
-# * server.
-CHECK_SCHEMA: str = "development"
+# * A disposable scratch schema owned by this script. ``development`` is a
+# * developer's working schema and must never be rebuilt by operator tooling.
+CHECK_SCHEMA: str = "tcbot_schema_check"
 
 
 def _database_url() -> str:

@@ -10,7 +10,7 @@ invariants the application relies on. A test that has to match the
 message of a guard needs to know what the server says, and the message
 lives in the SQL of the schema.
 
-The script builds the schema in the development schema of a server and
+The script builds the schema in a disposable scratch schema of a server and
 prints the message of every guard it can reach.
 
 Usage:
@@ -39,11 +39,9 @@ from tcbot.database.base import metadata  # noqa: E402
 from tcbot.database.migrations import scoped_url  # noqa: E402
 from tcbot.database.schema import apply_schema  # noqa: E402
 
-# * The schema the probe owns. The project uses three schemas and no
-# * more: ``public`` for the deployment, ``test`` for the integration
-# * tests, and ``development`` for a developer working against a shared
-# * server.
-PROBE_SCHEMA: str = "development"
+# * A disposable scratch schema owned by this script. ``development`` is a
+# * developer's working schema and must never be rebuilt by operator tooling.
+PROBE_SCHEMA: str = "tcbot_guard_probe"
 
 # * The rows every probe needs before it can reach its guard.
 _SETUP: tuple[str, ...] = (
