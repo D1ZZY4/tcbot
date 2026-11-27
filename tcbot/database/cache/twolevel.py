@@ -818,14 +818,21 @@ class TwoLevelCache[T]:
         return f"{self._namespace()}:{self._redis_prefix}:v2:tombstone:{key}"
 
     async def _tombstoned(self, rc: Any, key: Any) -> bool:
-        """Return True while another process has a pending revocation."""
+        """Return True while another process has a pending revocation.
+
+        An unreadable marker is treated as a revocation: a display read that
+        continues past a failed EXISTS could promote a role or locale that
+        another process already revoked.
+        """
         try:
             exists = await rc.exists(self._tombstone_key(key))
         except asyncio.CancelledError:
             raise
         except Exception as exc:
+            # ! CRITICAL: fail closed, a revoked value must never authorize.
+            _redis_mod.mark_op(ok=False)
             log.debug("Redis tombstone check failed for %s: %s", key, exc)
-            return False
+            return True
         return bool(exists)
 
     async def _redis_revoke(self, rkey: str, tomb_key: str) -> bool:
@@ -864,6 +871,8 @@ class TwoLevelCache[T]:
         it after the remote delete would restore the revoked role or group flag
         for the full TTL. The tombstone is written before that delete and lives
         longer than the queue, so checking it at write time closes the window.
+        An unreadable marker also skips the write: the payload cannot be proven
+        fresh, so it must not be published back into L2.
         """
         rc = await self._client()
         if rc is None:
@@ -877,7 +886,11 @@ class TwoLevelCache[T]:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
+            # ! CRITICAL: without a readable marker the payload may restore
+            # ! a remotely revoked role, so drop the write entirely.
+            _redis_mod.mark_op(ok=False)
             log.debug("Tombstone guard before L2 write failed for %s: %s", rkey, exc)
+            return False
         return await self._redis_set(rkey, payload)
 
     async def _redis_set(self, rkey: str, payload: str) -> bool:

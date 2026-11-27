@@ -291,6 +291,69 @@ def test_a_display_hint_invalidation_does_not_block_later_l2_fills(
     assert any(key.endswith(":umention:v2:7") for key in written_keys)
 
 
+def test_a_failed_tombstone_check_forces_the_source_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unreadable marker must not let a revoked L2 value authorize a caller.
+
+    EXISTS can fail while GET still works (an ACL restriction, for example).
+    Treating that as "no tombstone" would promote the old L2 role into L1.
+    """
+
+    class _ExistsFailsRedis(_StaleRedis):
+        async def exists(self, key: str) -> int:
+            _ = key
+            raise RuntimeError("EXISTS refused")
+
+    async def _run() -> None:
+        cache: TwoLevelCache[str] = TwoLevelCache(
+            memory_ttl=60, redis_ttl=90, redis_prefix="role"
+        )
+        calls = 0
+
+        async def _fetch() -> str:
+            nonlocal calls
+            calls += 1
+            return "fresh"
+
+        assert await cache.get_or_fetch(7, _fetch) == "fresh"
+        assert calls == 1
+        assert cache.get(7) != "revoked"
+
+    redis = _ExistsFailsRedis()
+    _tasks, outage = _queue(monkeypatch, redis)
+    outage["active"] = False
+    monkeypatch.setattr(redis_client_mod, "_liveness", None)
+    asyncio.run(_run())
+    assert redis_client_mod.liveness() is False
+
+
+def test_a_failed_tombstone_guard_skips_the_l2_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A payload whose marker cannot be read must not restore a revoked value."""
+
+    class _ExistsFailsRedis(_StaleRedis):
+        async def exists(self, key: str) -> int:
+            _ = key
+            raise RuntimeError("EXISTS refused")
+
+    async def _run() -> None:
+        cache: TwoLevelCache[str] = TwoLevelCache(
+            memory_ttl=60, redis_ttl=90, redis_prefix="role"
+        )
+        landed = await cache._redis_set_guarded("value-key", "payload", "tomb-key")
+        assert landed is False
+        assert redis.writes == 0
+
+    redis = _ExistsFailsRedis()
+    _tasks, outage = _queue(monkeypatch, redis)
+    outage["active"] = False
+    monkeypatch.setattr(redis_client_mod, "_liveness", None)
+    asyncio.run(_run())
+    assert redis_client_mod.liveness() is False
+
+
 def test_a_configured_redis_outage_without_a_client_is_reported(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
