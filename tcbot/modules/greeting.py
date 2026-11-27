@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from pyrogram import Client, filters
+from pyrogram import Client, ContinuePropagation, filters
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.types import Chat, ChatPermissions, Message, User
 
@@ -556,7 +556,18 @@ async def on_join_request_approved(ctx: Ctx) -> None:
     join (already handled by ``on_new_member``), so no double-enforcement.
     """
     cmu = ctx.chat_member
-    if cmu is None or not cmu.via_join_request:
+    if cmu is None:
+        return
+    # ! CRITICAL: Kurigram routes both bot-subject and human-subject member
+    # ! updates to one handler class. Propagate the bot's own updates so the
+    # ! connect handler still owns them even if this module is registered
+    # ! first; consuming them here would silently skip approved-join checks.
+    subject = getattr(getattr(cmu, "new_chat_member", None), "user", None)
+    if subject is not None:
+        own_id = (await bot_identity(ctx.bot)).id
+        if subject.id == own_id:
+            raise ContinuePropagation()
+    if not cmu.via_join_request:
         return
     new_member = cmu.new_chat_member
     if new_member is None or new_member.status != ChatMemberStatus.MEMBER:
