@@ -22,7 +22,6 @@ from tcbot.modules.helper.messages import (
     send_log,
 )
 from tcbot.modules.helper.pipelines.demote_actions import demote_before_enforcement
-from tcbot.modules.helper.pipelines.mod_action_steps import rules_from_scope
 from tcbot.modules.helper.pipelines.proof_post import (
     ProofUpload,
     upload_proof_for_action,
@@ -149,7 +148,6 @@ async def execute_kick(
                     repair_run,
                 )
 
-    rule_ids, rule_note = rules_from_scope(flow_scope(ctx), "kick")
     try:
         kick_action_id = await db.kicks_db.log_kick(
             target_id,
@@ -162,8 +160,6 @@ async def execute_kick(
             ),
             destination_chat_id=cfg.proofs[0],
             destination_thread_id=cfg.proofs[1],
-            rule_item_ids=rule_ids,
-            rule_selection_note=rule_note,
         )
     except Exception:
         log.exception("log_kick DB write failed for target=%d", target_id)

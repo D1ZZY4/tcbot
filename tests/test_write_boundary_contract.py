@@ -12,7 +12,6 @@ from typing import Any
 import pytest
 
 from tcbot.database import groups_db
-from tcbot.database.rules_db import read as rules_read
 
 
 async def _inline_db_call(op: Any, **_kwargs: Any) -> Any:
@@ -44,22 +43,3 @@ def test_group_migration_runs_on_the_write_boundary(
     assert asyncio.run(groups_db.migrate_group(-100, -200)) is True
     assert len(seen) == 1
     assert "repoint_chat_records" in seen[0]
-
-
-def test_rule_acknowledgement_runs_on_the_write_boundary(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Recording an acknowledgement inserts a row, so it must commit."""
-    seen: list[str] = []
-
-    async def _write(stmt: Any) -> list[dict[str, Any]]:
-        seen.append(str(stmt))
-        return [{"id": 9}]
-
-    monkeypatch.setattr(rules_read, "db_call", _inline_db_call)
-    monkeypatch.setattr(rules_read, "run_returning", _write)
-    monkeypatch.setattr(rules_read, "fetch_all", _no_read)
-
-    assert asyncio.run(rules_read.record_acknowledgement(4, 7, -100, 12)) is True
-    assert len(seen) == 1
-    assert "rule_acknowledgements" in seen[0]

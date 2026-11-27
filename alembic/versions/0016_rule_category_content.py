@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from sqlalchemy import text
+
 from alembic import op
 
 if TYPE_CHECKING:
@@ -30,7 +32,13 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Create the localized category presentation table."""
+    """Create the localized category presentation table where its parent exists."""
+    if (
+        not op.get_bind()
+        .execute(text("SELECT to_regclass('rule_sets') IS NOT NULL"))
+        .scalar()
+    ):
+        return
     op.execute(
         """
         CREATE TABLE IF NOT EXISTS rule_category_content (

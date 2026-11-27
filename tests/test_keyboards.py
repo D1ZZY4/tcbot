@@ -13,7 +13,6 @@ from pyrogram.enums import ButtonStyle as KeyboardButtonStyle
 
 from tcbot.modules.helper import buttons as btn
 from tcbot.modules.helper.buttons import menus as menu_btn
-from tcbot.modules.helper.buttons import rules as rule_btn
 from tcbot.modules.helper.buttons.common import close_btn
 from tcbot.modules.helper.rich import link as community_links
 
@@ -25,9 +24,6 @@ def test_every_open_in_pm_button_shares_the_start_menu_link() -> None:
     url = direct.inline_keyboard[0][0].url
     assert url == "https://t.me/tcbot?start=menu"
     assert btn.open_pm_btn("", "menu", "en-US") is None
-    chosen = btn.open_pm_btn("tcbot", "tcrules", "en-US")
-    assert chosen is not None
-    assert chosen.inline_keyboard[0][0].url == "https://t.me/tcbot?start=tcrules"
     assert group.inline_keyboard[0][0].url == url
     assert [b.callback_data for b in group.inline_keyboard[1]] == ["help_menu_group"]
 
@@ -222,24 +218,6 @@ def test_proof_done_is_success_and_cancel_stays_neutral() -> None:
             ("🗶 Cancel", "ban_cancel", None, KeyboardButtonStyle.DANGER),
         ]
     ]
-
-
-def test_rules_editor_colors_commit_and_destruction() -> None:
-    panel = _cells(rule_btn.editor_panel_btn(has_content=True))
-    flat = {cell[1]: cell[3] for row in panel for cell in row}
-    assert flat["rules_publish"] == KeyboardButtonStyle.SUCCESS
-    assert flat["rules_discard"] == KeyboardButtonStyle.DANGER
-
-    categories = _cells(
-        rule_btn.categories_btn([{"category_key": "spam", "title": "Spam"}])
-    )
-    flat_categories = {cell[1]: cell[3] for row in categories for cell in row}
-    assert flat_categories["rules_cat_del:spam"] == KeyboardButtonStyle.DANGER
-    assert flat_categories["rules_cat_up:spam"] == KeyboardButtonStyle.PRIMARY
-
-    confirm = _cells(rule_btn.confirm_btn("yes", "no"))
-    assert confirm[0][0][3] == KeyboardButtonStyle.DANGER
-    assert confirm[0][1][3] == KeyboardButtonStyle.DANGER
 
 
 def test_close_button_dismisses_a_panel() -> None:

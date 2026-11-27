@@ -202,7 +202,6 @@ All panels are assembled as localized rich text and delivered through
 | `ban_info.build_ban_summary` | `/checkme` ban summary card and back navigation. |
 | `messages/panels.py::about_msg` | About section index rendered from `about.index.*` catalog keys; each of the three section pages uses `about.section.*`. |
 | `messages/panels.py::render_groups` | Group list as a compact rich table: one Group column in the simple view and Group plus ID in Details. Truncated at `_MAX_RENDER_CHARS = 3800` to stay under the Telegram text limit. |
-| `messages/rules.py` | Rules read view, categories, items, and selected summary. |
 
 Dynamic values are wrapped with `Safe()` only after passing through `code()`,
 `bold()`, `italic()`, `user_ref()`, `fmt_date()`, or `fmt_time()`. The `t()` call owns escaping of

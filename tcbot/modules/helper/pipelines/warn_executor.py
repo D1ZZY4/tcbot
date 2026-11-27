@@ -22,7 +22,6 @@ from tcbot.modules.helper.pipelines.demote_actions import (
     Demote,
     demote_before_enforcement,
 )
-from tcbot.modules.helper.pipelines.mod_action_steps import rules_from_scope
 from tcbot.modules.helper.pipelines.proof_post import (
     ProofUpload,
     upload_proof_for_action,
@@ -122,7 +121,6 @@ async def execute_warn(
             parse_mode=None,
         )
         return
-    rule_ids, rule_note = rules_from_scope(flow_scope(ctx), "warn")
     try:
         count = await db.warns_db.add_warn(
             target_id,
@@ -135,8 +133,6 @@ async def execute_warn(
             ),
             destination_chat_id=cfg.proofs[0],
             destination_thread_id=cfg.proofs[1],
-            rule_item_ids=rule_ids,
-            rule_selection_note=rule_note,
         )
     except Exception:
         log.exception(
@@ -363,8 +359,6 @@ async def execute_warn(
                         proof_upload.expected_item_count if proof_upload else 0
                     ),
                     enforcement_chat_ids=[int(grp.get("chat_id", 0)) for grp in groups],
-                    rule_item_ids=rule_ids,
-                    rule_selection_note=rule_note,
                 )
                 ban_id = ban_doc.get("ban_id", "")
                 ban_run_id = ban_doc.get("enforcement_run_id")

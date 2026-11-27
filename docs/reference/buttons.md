@@ -3,7 +3,7 @@
 This page is the reference for every inline keyboard builder in TCF Bot. All
 builders live in `tcbot/modules/helper/buttons/`. Most are re-exported by the
 package `__init__.py`, so existing dotted imports keep working; builders in
-`common.py` and `rules.py` are reached through their own submodules. Exact
+`common.py` are reached through their own submodule. Exact
 callback payloads and `WAITING_*` states are in [callbacks.md](callbacks.md);
 how the messages that carry these keyboards are rendered is in
 [Transport](../flows/transport.md).
@@ -113,7 +113,7 @@ promotion picker are canonical English identifiers from `ROLE_LABEL`, not
 translated prose. `help_topics_menu_btn` and `help_topics_btn` take a `locale`
 for their Back and Close controls; their topic names are stable module
 identifiers. Builders never hardcode user-facing labels. Builders in `common.py`
-and `rules.py` are reached through their submodules rather than the package root.
+are reached through their submodule rather than the package root.
 
 ## Shared helpers (`common.py`, `nav.py`)
 
@@ -165,28 +165,6 @@ two-part shapes remain valid.
 
 The review id rides in the payload so an older card cannot decide a newer
 appeal; a legacy payload without the suffix falls back to the tapped message id.
-
-## Community rules (`rules.py`)
-
-| Builder | Emits | Style |
-|---|---|---|
-| `picker_btn(items, selected)` | `rules_step:pick:<id>` (blue), `other` (none), `done` (green), `clear` (none), `cancel` (red) | mixed |
-| `editor_panel_btn(locale, has_content=..., content_locale=...)` | The live main editor panel: `rules_edit_draft` (blue), `rules_preview` (blue), Upload .md (blue), `rules_lang` (blue), Close; adds `rules_publish` (green) and `rules_discard` (red) only when the draft has items | mixed |
-| `rules_language_btn`, `rules_section_btn`, `section_editor_btn` | `rules_lang_set:<code>`, `rules_sections`, `rules_section_title`, `rules_section_edit:<id>` | mixed |
-| `draft_preview_btn`, `draft_preview_sections_btn` | `rules_preview_cat:<key>`, `rules_preview_sec:<n>`, Back to the editor panel + Close | mixed |
-| `editor_items_page_btn` | `rules_items_page:<n>` for the paginated item list | mixed |
-| `preview_btn` | Back to the editor panel + Close for the draft preview | mixed |
-| `categories_btn` | `rules_cat:<key>`, rename/up/down (blue), `rules_cat_del:<key>` (red), `rules_cat_add` (blue), Back + Close | mixed |
-| `items_btn` | `rules_item_add` (blue), Back + Close | mixed |
-| `confirm_btn(yes, no)` | destructive confirmation: Yes (red), No (red), Back + Close | mixed |
-| `prompt_btn(back)` | Back + Close for a text-entry step | mixed |
-| `rules_index_btn(categories, locale, page)` | `rules_show:<key>`, `rules_index:<n>` | mixed |
-| `category_sections_btn(sections, locale)` | `rules_section:<n>`, Back + Close | mixed |
-| `rules_page_btn(...)` | `rules_prev:<n>`, `rules_next:<n>` | green |
-| `ack_btn(version, member)` | `rules_ack:<version>:<member>` | green |
-
-Category slugs are capped at 40 characters so even the longest callback and a
-collision suffix stay within 64 bytes.
 
 ## Check and statistics (`check.py`, `stats.py`, `drills.py`)
 

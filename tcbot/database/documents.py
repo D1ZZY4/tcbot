@@ -79,7 +79,6 @@ class BanDoc(TypedDict, total=False):
     action_origin: str
     scope_type: ScopeType
     origin_chat_id: int | None
-    rules: list[str]
     metadata: dict[str, object]
 
 

@@ -25,11 +25,10 @@ async def stale_ban_callback(ctx: Ctx) -> bool:
     on an older ban prompt can be delivered to a newer ban. The prompt
     identity recorded at entry decides which taps are current.
 
-    Shared `rules_step:*` payloads are also emitted by kick, mute, and warn.
-    A stale ban tap therefore raises ``ContinuePropagation`` without answering:
-    the owning flow answers once, and Telegram rejects a second answer to the
-    same query id. The dispatcher's final fallback acknowledges a tap nobody
-    owns.
+    A stale tap raises ``ContinuePropagation`` without answering, so any other
+    flow that owns the callback can answer once. Telegram rejects a second
+    answer to the same query id; the dispatcher's final fallback acknowledges a
+    tap nobody owns.
     """
     if callback_is_current(
         ctx,
@@ -66,11 +65,10 @@ async def on_ban_update_continue(ctx: Ctx) -> int | None:
     reason = str(scope.get("ban_reason") or "")
     if not target_id or not reason:
         return ConversationHandler.END
-    # * The demote runs at enforcement time while the proof step stays
-    # * cancelable. Late import avoids a cycle with the rules step.
-    from tcbot.modules.helper.pipelines.ban_rules_step import show_ban_rules  # noqa: PLC0415
+    # * The demote runs at enforcement time while the proof step stays cancelable.
+    from tcbot.modules.helper.pipelines.ban_proof_prompt import show_ban_proof  # noqa: PLC0415
 
-    return await show_ban_rules(ctx)
+    return await show_ban_proof(ctx)
 
 
 def _ban_keys() -> tuple[str, ...]:

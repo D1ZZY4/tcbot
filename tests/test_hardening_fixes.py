@@ -13,20 +13,10 @@ from pyrogram.errors import MessageIdInvalid, MessageNotModified
 
 from tcbot import cfg
 from tcbot.database import enforcement_ledger
-from tcbot.database.rules_db import sets as rules_sets
-from tcbot.database.rules_db.categories import _available_key
 from tcbot.database.schema import SCHEMA_FILES, _schema_of
 from tcbot.database.schema.loader import file_statements
 from tcbot.modules.helper.pipelines.errors.exceptions import BadRequest
 from tcbot.modules.helper.rich.edit_msg import _edit_via
-from tests.postgres_support import identity_db_call
-
-
-def test_non_ascii_category_slug_collision_stays_valid() -> None:
-    """A title with no ASCII alphanumerics must not produce an invalid '-2' key."""
-    assert _available_key("中文分类", {"category"}) == "category-2"
-    assert _available_key("!!!", {"category", "category-2"}) == "category-3"
-    assert _available_key("News", set()) == "news"
 
 
 def test_schema_placeholder_is_valid_inside_sql_literals() -> None:
@@ -189,33 +179,3 @@ async def test_run_action_claimable_marker_matches_the_retry_claim(
         "FROM connected_chats AS cc"
     ) in compact
     assert params["primary_chat_id"] == cfg.main_group
-
-
-async def test_existing_rule_set_without_categories_is_backfilled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A legacy set with no catalogue gets its defaults before items are read."""
-    seeded: list[int] = []
-
-    async def _one(stmt: Any) -> dict[str, Any]:
-        return {"id": 7, "scope_type": "community"}
-
-    async def _none(stmt: Any) -> list[dict[str, Any]]:
-        return []
-
-    async def _seed(sess: Any, set_id: int, now: Any) -> None:
-        seeded.append(set_id)
-
-    async def _transaction(op: Any) -> Any:
-        return await op(object())
-
-    monkeypatch.setattr(rules_sets, "db_call", identity_db_call)
-    monkeypatch.setattr(rules_sets, "fetch_one", _one)
-    monkeypatch.setattr(rules_sets, "fetch_all", _none)
-    monkeypatch.setattr(rules_sets, "run_transaction", _transaction)
-    monkeypatch.setattr(rules_sets, "_seed_default_categories", _seed)
-
-    rule_set = await rules_sets.get_or_create_community_set()
-
-    assert rule_set["id"] == 7
-    assert seeded == [7]

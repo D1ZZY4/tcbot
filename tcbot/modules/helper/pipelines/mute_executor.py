@@ -25,7 +25,6 @@ from tcbot.modules.helper.messages import (
 )
 from tcbot.modules.helper.pipelines import moderation_enforcement
 from tcbot.modules.helper.pipelines.demote_actions import demote_before_enforcement
-from tcbot.modules.helper.pipelines.mod_action_steps import rules_from_scope
 from tcbot.modules.helper.pipelines.proof_post import (
     ProofUpload,
     upload_proof_for_action,
@@ -184,7 +183,6 @@ async def execute_mute(bot: Client, ctx: Ctx, meta: dict[str, Any]) -> None:
     # * so the mute and its history cannot disagree.
     record_r: BaseException | None = None
     run_id: int | None = None
-    rule_ids, rule_note = rules_from_scope(meta, "mute")
     # * Compute the absolute deadline after the proof upload and demote gate,
     # * immediately before the write. Capturing it at executor entry let a
     # * slow upload consume most of a short mute: the worker then applied a
@@ -208,8 +206,6 @@ async def execute_mute(bot: Client, ctx: Ctx, meta: dict[str, Any]) -> None:
             ),
             destination_chat_id=cfg.proofs[0],
             destination_thread_id=cfg.proofs[1],
-            rule_item_ids=rule_ids,
-            rule_selection_note=rule_note,
         )
     except asyncio.CancelledError:
         raise

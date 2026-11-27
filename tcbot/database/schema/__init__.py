@@ -126,9 +126,9 @@ def _created_statements(statements: list[str], existing: set[str]) -> list[str]:
 
     The SQL files are current while an early Alembic revision may run them
     against an older table set. Drops are already filtered by ``existing``;
-    creates must use the same rule or a forward-referenced table such as
-    ``rule_publications`` aborts the whole reapply script before the
-    deployment reaches the revision that introduces it.
+    creates must use the same rule or a forward-referenced table aborts the
+    whole reapply script before the deployment reaches the revision that
+    introduces it.
     """
     kept: list[str] = []
     for statement in statements:

@@ -326,8 +326,9 @@ def _main_group_from_env() -> int:
 def _main_channel_from_env() -> int:
     """Read ``MAIN_CHANNEL``; a channel id has to be negative.
 
-    The channel is the publication target for rules. A positive value
-    names a user and cannot be a channel, so it is treated as unset.
+    The channel backs the community menu link and is a deployment-owned
+    destination. A positive value names a user and cannot be a channel,
+    so it is treated as unset.
     """
     value = _chat_id_from_env("MAIN_CHANNEL")
     if value > 0:

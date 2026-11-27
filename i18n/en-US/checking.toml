@@ -126,7 +126,6 @@ admin_id = "Admin ID: {id}"
 reason = "*Reason:* {reason}"
 ban_id = "Ban ID: {id}"
 date = "Date: {date}\nTime: {time}"
-rules = "Rules broken: {rules}"
 unknown_date = "Unknown"
 
 # Column headers and row labels for the ban detail table. Values carry the
@@ -141,7 +140,6 @@ admin_id = "Admin ID"
 reason = "Reason"
 ban_id = "Ban ID"
 date = "Date"
-rules = "Rules broken"
 
 # checkme/check runtime (checking.py). [error] sends plain.
 # Placeholders: {user} pre-formatted mention, {name} raw name,

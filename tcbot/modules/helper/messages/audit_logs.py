@@ -8,9 +8,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from collections.abc import Sequence
-
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.rich.formats import divider, heading, paragraph
@@ -419,7 +416,6 @@ def appeal_received_log(
     target_fname: str,
     ban_id: str,
     appeal_link: str,
-    rules: Sequence[str] = (),
     *,
     appeal_excerpt: str = "",
 ) -> str:
@@ -434,8 +430,6 @@ def appeal_received_log(
         f"{user_ref(target_id, target_fname)} (ID: {code(str(target_id))})",
     )
     b.code_field("Ban ID", ban_id)
-    if rules:
-        b.field("Rules broken", ", ".join(rules))
     if appeal_link:
         b.link_field("Appeal", "View", appeal_link)
     elif appeal_excerpt:

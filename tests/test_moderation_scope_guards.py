@@ -16,7 +16,7 @@ from pyrogram import ContinuePropagation
 from tcbot.modules.helper.handlers import ConversationHandler
 from tcbot.modules.helper.pipelines import (
     appeal_submit,
-    ban_rules_step,
+    ban_proof_prompt,
     ban_session,
     mod_action_steps,
     proof_session,
@@ -58,50 +58,17 @@ def test_a_proof_prompt_never_renders_a_missing_target(monkeypatch: Any) -> None
         sends.append("edit")
         return SimpleNamespace(id=1)
 
-    monkeypatch.setattr(ban_rules_step, "reply_rich_result", _reply)
-    monkeypatch.setattr(ban_rules_step, "safe_edit_cb", _edit)
+    monkeypatch.setattr(ban_proof_prompt, "reply_rich_result", _reply)
+    monkeypatch.setattr(ban_proof_prompt, "safe_edit_cb", _edit)
     scope: dict[str, Any] = {}
     ctx = _ctx()
     ctx.user_data = scope
 
-    state = asyncio.run(ban_rules_step._show_proof(ctx))
+    state = asyncio.run(ban_proof_prompt.show_ban_proof(ctx))
 
     assert state == ConversationHandler.END
     assert sends == []
     assert scope == {}
-
-
-def test_a_rules_note_without_a_live_ban_passes_through() -> None:
-    """The flatly registered text handler must not capture arbitrary text."""
-    scope: dict[str, Any] = {}
-    ctx = _ctx(text="mana gw udah rela ngebuang kegamonan gwa")
-    ctx.user_data = scope
-
-    async def _run() -> None:
-        with pytest.raises(ContinuePropagation):
-            await ban_rules_step.on_ban_rules_note(ctx)
-
-    asyncio.run(_run())
-    assert scope == {}
-
-
-def test_an_abandoned_ban_picker_does_not_capture_group_text() -> None:
-    """A stale ban scope needs an explicit note phase before accepting text."""
-    scope: dict[str, Any] = {
-        "ban_target_id": 99,
-        "ban_admin_id": 7,
-        "ban_prompt_msg_id": 12,
-        "ban_prompt_chat_id": -100,
-    }
-    ctx = _ctx()
-    ctx.user_data = scope
-
-    async def _run() -> None:
-        with pytest.raises(ContinuePropagation):
-            await ban_rules_step.on_ban_rules_note(ctx)
-
-    asyncio.run(_run())
-    assert "ban_rules_note" not in scope
 
 
 def test_an_unknown_command_without_an_appeal_passes_through(monkeypatch: Any) -> None:
@@ -159,8 +126,6 @@ def test_a_reason_without_a_live_flow_passes_through() -> None:
     async def _run() -> None:
         with pytest.raises(ContinuePropagation):
             await flow._on_reason_text(ctx)
-        with pytest.raises(ContinuePropagation):
-            await flow._on_rules_note_text(ctx)
         with pytest.raises(ContinuePropagation):
             await flow._on_reason_unexpected(ctx)
         with pytest.raises(ContinuePropagation):

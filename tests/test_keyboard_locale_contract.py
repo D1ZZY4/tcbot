@@ -11,17 +11,7 @@ import inspect
 import pkgutil
 
 import tcbot.modules.helper.buttons as buttons
-from tcbot.modules.helper.buttons import rules as rules_buttons
 from tcbot.utils.i18n import t
-
-_FMT_KEYS = (
-    "fmt_bold",
-    "fmt_italic",
-    "fmt_list",
-    "fmt_divider",
-    "fmt_code",
-    "fmt_plain",
-)
 
 
 def test_help_topics_close_button_follows_locale() -> None:
@@ -50,27 +40,3 @@ def test_keyboard_builders_take_a_locale() -> None:
             if "locale" not in inspect.signature(value).parameters:
                 missing.append(f"{module.__name__}.{name}")
     assert not missing, f"keyboard builders without locale: {missing}"
-
-
-def test_rules_section_fallback_label_is_localized() -> None:
-    """An untitled section must not show an English label to every reader."""
-    for locale in ("en-US", "id-ID"):
-        markup = rules_buttons.editor_sections_btn([{"id": 5}], locale)
-        label = markup.inline_keyboard[0][0].text
-        assert label == t("button.rules_section", locale, n=5, plain=True)
-    assert t("button.rules_section", "en-US", n=5) != t(
-        "button.rules_section", "id-ID", n=5
-    )
-
-
-def test_rules_editor_toolbar_follows_the_reader_locale() -> None:
-    """Formatting buttons come from the catalog, not hardcoded English."""
-    en_labels: list[str] = []
-    id_labels: list[str] = []
-    for locale, target in (("en-US", en_labels), ("id-ID", id_labels)):
-        markup = rules_buttons.section_editor_btn(locale)
-        target.extend(
-            button.text for row in markup.inline_keyboard[:3] for button in row
-        )
-        assert target == [t(f"button.{key}", locale, plain=True) for key in _FMT_KEYS]
-    assert en_labels != id_labels

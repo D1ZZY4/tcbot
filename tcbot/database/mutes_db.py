@@ -86,8 +86,6 @@ async def record_mute(
     proof_expected_count: int = 0,
     destination_chat_id: int = 0,
     destination_thread_id: int | None = None,
-    rule_item_ids: Sequence[int] = (),
-    rule_selection_note: str | None = None,
 ) -> tuple[int, int | None]:
     """Record a community mute and return its decision and delivery run.
 
@@ -204,9 +202,6 @@ async def record_mute(
         )
         if row is None:
             raise RuntimeError("the mute decision was not written")
-        await moderation_db.link_case_rules(
-            sess, case_id, rule_item_ids, admin_id, chat_id, rule_selection_note
-        )
         run_id: int | None = None
         if enforcement_chat_ids is not None:
             run_id = await enforcement_ledger.queue_run(

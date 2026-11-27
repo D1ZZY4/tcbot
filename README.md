@@ -43,7 +43,6 @@ Run from a checkout with `uv sync --frozen`, or use the container image. Non-edi
 | `/tcconnect`, `/tcdisconnect`, `/rmtc`, `/tcgroups` | Connect or remove groups and list the federation roster. |
 | `/tcpromote`, `/tcsetrole`, `/tcdemote`, `/transferowner` | Manage Owner, Admin, Developer, and Moderator roles, including changing an existing role. |
 | `/tcstats` | Federation statistics with drill-down views. |
-| `/tcrules` (alias `/tcrls`), `/rules` | Staff rule editor and the read-only community rules menu. |
 | `/tcpromoterequests`, `/tcpromotelist` | Submit an Admin promotion request and list the pending ones. |
 | `/help`, `/start` | Topic help and the start menu. |
 | `/language` | Per-user or per-group interface language. |

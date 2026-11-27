@@ -142,8 +142,6 @@ async def add_warn(
     proof_expected_count: int = 0,
     destination_chat_id: int = 0,
     destination_thread_id: int | None = None,
-    rule_item_ids: Sequence[int] = (),
-    rule_selection_note: str | None = None,
 ) -> int:
     """Add a new warning to a user in a specific chat.
 
@@ -202,9 +200,6 @@ async def add_warn(
                 evidence_upload_id=upload_id,
                 action_origin="manual",
             )
-        )
-        await moderation_db.link_case_rules(
-            sess, case_id, rule_item_ids, admin_id, chat_id, rule_selection_note
         )
         # * The investigation ends with its decision: an open case is
         # * picked up by the next decision about the same user, so the

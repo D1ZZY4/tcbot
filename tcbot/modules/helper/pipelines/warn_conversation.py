@@ -40,7 +40,6 @@ def warn_conversation(
         entry_filter,
         escape_filter=escape_filter,
         min_role="moderator",
-        rules_enabled=True,
     )
 
 

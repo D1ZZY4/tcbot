@@ -126,7 +126,6 @@ admin_id = "ID Admin: {id}"
 reason = "*Alasan:* {reason}"
 ban_id = "ID Ban: {id}"
 date = "Tanggal: {date}\nWaktu: {time}"
-rules = "Aturan yang dilanggar: {rules}"
 unknown_date = "Tidak diketahui"
 
 # Header kolom dan label baris untuk tabel detail ban. Nilainya memuat
@@ -141,7 +140,6 @@ admin_id = "ID Admin"
 reason = "Alasan"
 ban_id = "ID Ban"
 date = "Tanggal"
-rules = "Aturan dilanggar"
 
 # checkme/check runtime (checking.py). [error] sends plain.
 # Placeholders: {user} pre-formatted mention, {name} raw name,

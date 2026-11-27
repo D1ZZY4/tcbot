@@ -35,7 +35,6 @@ def kick_conversation(entry_fn: Callable[..., Any], entry_filter: BaseFilter) ->
         _exec_kick,
         entry_filter,
         min_role="moderator",
-        rules_enabled=True,
     )
 
 

@@ -17,7 +17,7 @@ from tcbot import database as db
 from tcbot.database import users_cache
 from tcbot.database.cache import user_mention_cache
 from tcbot.modules.helper import guards
-from tcbot.modules.helper.pipelines import mute_executor, rules_publish, warn_executor
+from tcbot.modules.helper.pipelines import mute_executor, warn_executor
 from tcbot.modules.helper.pipelines.connect_added import connection
 from tcbot.modules.helper.pipelines.errors import report as error_reporter
 
@@ -65,60 +65,6 @@ def test_forwarded_role_lookup_failure_yields_a_refusal(
     )
     assert result == (None, None)
     assert len(replies) == 1
-
-
-def test_failed_slot_with_unchanged_hash_is_edited_again(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A previous channel failure is not erased by an identical content hash."""
-    publish = rules_publish
-    calls: list[str] = []
-
-    async def _noop(*args: Any, **kwargs: Any) -> Any:
-        return None
-
-    async def _acquire(*args: Any, **kwargs: Any) -> int:
-        return 9
-
-    async def _items(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:
-        return [{"id": 1}]
-
-    async def _state(*args: Any, **kwargs: Any) -> tuple[str, str]:
-        return "digest", "failed"
-
-    async def _upsert(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        return {"id": 3, "message_id": 55}
-
-    async def _edit(*args: Any, **kwargs: Any) -> bool:
-        calls.append("edit")
-        return True
-
-    async def _mark(*args: Any, **kwargs: Any) -> None:
-        calls.append("synced")
-
-    async def _send(*args: Any, **kwargs: Any) -> Any:
-        raise AssertionError("an existing message must be edited, not reposted")
-
-    monkeypatch.setattr(publish, "cfg", SimpleNamespace(main_channel=-100))
-    monkeypatch.setattr(publish.rules_db.runs, "reclaim_expired", _noop)
-    monkeypatch.setattr(publish.rules_db.runs, "acquire", _acquire)
-    monkeypatch.setattr(publish.rules_db.runs, "finish", _noop)
-    monkeypatch.setattr(publish.rules_db, "all_items", _items)
-    monkeypatch.setattr(publish.rules_db, "published_version", _noop)
-    monkeypatch.setattr(publish.rules_db, "promote_version", _noop)
-    monkeypatch.setattr(publish.rules_db.publications, "slot_state", _state)
-    monkeypatch.setattr(publish.rules_db.publications, "upsert_slot", _upsert)
-    monkeypatch.setattr(publish.rules_db.publications, "mark_synced", _mark)
-    monkeypatch.setattr(publish.rules_db.publications, "retire_unused", _noop)
-    monkeypatch.setattr(publish, "content_hash", lambda text: "digest")
-    monkeypatch.setattr(
-        publish, "render_channel", lambda *args, **kwargs: [("cat", 0, "text")]
-    )
-    monkeypatch.setattr(publish, "safe_edit_message", _edit)
-    monkeypatch.setattr(publish, "send_text", _send)
-
-    asyncio.run(publish.publish_rules(1, 2, 3, SimpleNamespace()))
-    assert calls == ["edit", "synced"]
 
 
 def test_refresh_display_name_respects_concurrent_invalidation(

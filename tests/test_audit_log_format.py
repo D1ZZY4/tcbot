@@ -28,7 +28,7 @@ def _samples() -> dict[str, str]:
         "unwarn": audit_logs.unwarn_log(1, "Ann", 2, "Bob", 1, 3, -100, "Group"),
         "unban": audit_logs.unban_log(1, "Ann", 2, "Bob", "ban-1", "appeal"),
         "appeal_received": audit_logs.appeal_received_log(
-            1, "Ann", "ban-1", "https://t.me/c/1/2", ["rule 1"]
+            1, "Ann", "ban-1", "https://t.me/c/1/2"
         ),
         "appeal_submitted": audit_logs.appeal_submitted_log(
             1, "Ann", "ban-1", "https://t.me/c/1/2"

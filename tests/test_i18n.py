@@ -964,7 +964,6 @@ def test_get_help_matches_default_import() -> None:
         "maintenance",
         "mute",
         "netspeed",
-        "rules",
         "stats",
         "unban",
         "warns",
@@ -972,13 +971,6 @@ def test_get_help_matches_default_import() -> None:
         mod = importlib.import_module(f"tcbot.modules.{mod_name}")
         assert dict(mod.get_help()) == dict(mod.__help__), mod_name
         assert dict(mod.get_help(DEFAULT_LOCALE)) == dict(mod.__help__), mod_name
-
-
-def test_rules_help_name_is_a_stable_identifier() -> None:
-    rules_mod = importlib.import_module("tcbot.modules.rules")
-    assert rules_mod.__module_name__ == "Rules"
-    assert dict(rules_mod.get_help("id-ID"))["name"] == "Rules"
-    assert dict(rules_mod.get_help("en-US"))["name"] == "Rules"
 
 
 def test_demote_auto_verb_is_localized() -> None:

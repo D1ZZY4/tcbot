@@ -17,7 +17,6 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.types import as_int
 from tcbot.modules.helper import buttons, decorators
-from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.context import Ctx, bot_identity, chat_id_of, display_name
 from tcbot.modules.helper.handlers import (
     CHAT_MEMBER,
@@ -199,26 +198,6 @@ async def _send_join_ban_notices(
             chat_id_of(chat),
             dm_result,
         )
-
-
-async def _ack_markup(member_id: int, locale: str) -> object | None:
-    """Build the greeting's I agree button when the current version needs it.
-
-    A failure to read the rules never blocks a welcome: the greeting is sent
-    without a button, and the member can still join. Acknowledgement stays a
-    greeting-only surface, so no button appears on channel posts or /rules.
-    """
-    try:
-        requirement = await db.rules_db.acknowledgement_requirement(locale)
-        if requirement is None:
-            return None
-        version_id = requirement[0]
-        if await db.rules_db.has_acknowledged(version_id, member_id):
-            return None
-        return rules_btn.ack_btn(version_id, member_id, locale)
-    except Exception as exc:
-        log.debug("Greeting acknowledgement lookup failed for %d: %s", member_id, exc)
-        return None
 
 
 async def _ban_state_with_retry(user_id: int) -> BanDoc | None:
@@ -492,7 +471,6 @@ async def _handle_member(
                 await _queue_join_repair(mute, chat_id_of(chat), member.id)
 
     if greet:
-        markup = await _ack_markup(member.id, locale)
         await reply_rich(
             msg,
             t(
@@ -502,7 +480,6 @@ async def _handle_member(
                 community=cfg.community_name,
             ),
             log_label=f"Welcome for uid={member.id}",
-            reply_markup=markup,
         )
 
 

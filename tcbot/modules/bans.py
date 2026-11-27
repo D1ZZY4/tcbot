@@ -25,10 +25,7 @@ from tcbot.modules.helper.messages import (
     reply_rich_result,
 )
 from tcbot.modules.helper.pipelines.ban_conversation import ban_conversation
-from tcbot.modules.helper.pipelines.ban_rules_step import (
-    BAN_RULES_STATES,
-    show_ban_rules,
-)
+from tcbot.modules.helper.pipelines.ban_proof_prompt import show_ban_proof
 from tcbot.modules.helper.pipelines.ban_session import (
     BAN_USER_DATA_KEYS,
     WAITING_UPDATE_CONFIRM,
@@ -194,7 +191,7 @@ async def cmd_ban_start(ctx: Ctx) -> int:
     # * without anything ever happening to them. The enforcement-time
     # * demote closes the same role-vs-state invariant.
 
-    return await show_ban_rules(ctx)
+    return await show_ban_proof(ctx)
 
 
 async def _ask_update_confirm(
@@ -252,6 +249,4 @@ async def _ask_update_confirm(
 
 _BAN_CMDS = build_prefixed_filters("tcban") | build_prefixed_filters("tcb")
 
-__handlers__ = [
-    ban_conversation(cmd_ban_start, _BAN_CMDS, extra_states=BAN_RULES_STATES)
-]
+__handlers__ = [ban_conversation(cmd_ban_start, _BAN_CMDS)]

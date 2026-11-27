@@ -17,6 +17,8 @@ Create Date: 2026-11-21
 
 from __future__ import annotations
 
+from sqlalchemy import text
+
 from alembic import op
 from tcbot.database.base import metadata
 from tcbot.database.schema import apply_schema
@@ -32,19 +34,29 @@ _NEW_TABLES = ("rule_categories", "rule_publication_runs", "rule_publications")
 def upgrade() -> None:
     """Create the new tables, columns, indexes, and the scope trigger."""
     bind = op.get_bind()
-    metadata.create_all(
-        bind=bind,
-        tables=[metadata.tables[name] for name in _NEW_TABLES],
-        checkfirst=True,
-    )
-    op.execute("ALTER TABLE rule_items ADD COLUMN IF NOT EXISTS category_title TEXT")
-    op.execute(
-        "ALTER TABLE rule_items ADD COLUMN IF NOT EXISTS category_sort_order INTEGER"
-    )
-    op.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS uq_rule_set_versions_draft "
-        "ON rule_set_versions (rule_set_id, locale) WHERE status = 'draft'"
-    )
+    # * The rules feature was later removed. The revision stays in history,
+    # * but a fresh chain no longer declares these tables in metadata, so the
+    # * original unconditional DDL would fail. Only apply it where the base
+    # * tables still exist.
+    tables = [metadata.tables[name] for name in _NEW_TABLES if name in metadata.tables]
+    if tables:
+        metadata.create_all(bind=bind, tables=tables, checkfirst=True)
+    exists = bind.execute(text("SELECT to_regclass('rule_items') IS NOT NULL")).scalar()
+    if exists:
+        op.execute(
+            "ALTER TABLE rule_items ADD COLUMN IF NOT EXISTS category_title TEXT"
+        )
+        op.execute(
+            "ALTER TABLE rule_items ADD COLUMN IF NOT EXISTS category_sort_order INTEGER"
+        )
+    version_exists = bind.execute(
+        text("SELECT to_regclass('rule_set_versions') IS NOT NULL")
+    ).scalar()
+    if version_exists:
+        op.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_rule_set_versions_draft "
+            "ON rule_set_versions (rule_set_id, locale) WHERE status = 'draft'"
+        )
     apply_schema(bind)
 
 

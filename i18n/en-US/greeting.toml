@@ -8,7 +8,7 @@ banned_group = "Federation ban enforced on join.\n*User:* {user}\n*ID:* {uid}\n*
 banned_dm = "You are federation-banned from {community} and were banned in {group}.\n\nBan ID: {ban}\nReason: {reason}\n\nUse View Log and View Proof for details. If you believe this is a mistake, Submit Appeal."
 
 [welcome]
-body = "Welcome, {user}. This is an official {community} group. Please read the group rules before participating."
+body = "Welcome, {user}. This is an official {community} group."
 
 [left]
 body = "{user} has left."

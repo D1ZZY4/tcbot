@@ -322,11 +322,6 @@ _IDENTITY_PREFIXES = (
     "prevent_historical",
     "set_updated_at",
 )
-_RULES_PREFIXES = (
-    "ensure_published_rule",
-    "guard_rule_",
-    "validate_rule_publication",
-)
 _AUDIT_PREFIXES = ("guard_appeal_ban_target", "validate_audit_event_entity")
 _MTPROTO_PREFIXES = ("mtproto_state_", "prune_expired_mtproto_state")
 
@@ -341,7 +336,6 @@ def _function_domain(name: str) -> str:
         (_MAINTENANCE_PREFIXES, "maintenance"),
         (_RBAC_PREFIXES, "rbac"),
         (_IDENTITY_PREFIXES, "identity"),
-        (_RULES_PREFIXES, "rules"),
     )
     for prefixes, domain in domains:
         if name.startswith(prefixes):

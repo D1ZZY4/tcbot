@@ -214,11 +214,6 @@ BEGIN
      WHERE chat_id = p_old_chat_id AND status = 'pending';
     GET DIAGNOSTICS v_requests = ROW_COUNT;
 
-    -- * The context of a rule violation follows the group it happened in.
-    UPDATE %SCHEMA%.moderation_case_rules
-       SET context_chat_id = p_new_chat_id
-     WHERE context_chat_id = p_old_chat_id;
-
     IF v_was_active THEN
         INSERT INTO %SCHEMA%.audit_events (
             event_key, entity_type, entity_id, payload

@@ -14,10 +14,8 @@ from pyrogram import ContinuePropagation, filters
 from pyrogram.filters import Filter as BaseFilter
 from pyrogram.types import InlineKeyboardMarkup
 
-from tcbot import database as db
 from tcbot.modules.helper import guards
 from tcbot.modules.helper.buttons import reason_step_btn
-from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.context import Ctx
 from tcbot.modules.helper.extraction import parse_user_id_token
 from tcbot.modules.helper.handlers import (
@@ -33,9 +31,7 @@ from tcbot.modules.helper.messages import (
     safe_edit_cb,
     safe_edit_message,
 )
-from tcbot.modules.helper.pipelines import rules_picker
 from tcbot.modules.helper.pipelines.proof_steps import PROOF_MEDIA_FILTER, BuildProof
-from tcbot.modules.helper.rich.edit_msg import callback_text_of
 from tcbot.modules.helper.scope import (
     callback_is_current,
     clear_flow_scope,
@@ -57,23 +53,13 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 
-def rules_from_scope(
-    scope: dict[str, Any], action: str
-) -> tuple[list[int], str | None]:
-    """Return the rule ids and optional note collected by the picker."""
-    return list(scope.get(f"{action}_rules", [])), scope.get(f"{action}_rules_note")
-
-
 # ───────────────────────── Reason parsing ───────────────────────── #
 
 
 WAITING_REASON = 0
 WAITING_PROOF = 1
-WAITING_RULES = 2
-WAITING_RULES_NOTE = 3
 
 MAX_REASON_LEN: int = 1000
-MAX_RULES_NOTE_LEN: int = 200
 
 # * Re-entry commands of each moderation conversation. They stay in the fallback so
 # * starting the same action again still ends the previous conversation.
@@ -177,18 +163,13 @@ class _FlowBase:
         proof: BuildProof,
         executor: Callable[..., Any],
         min_role: RoleName,
-        *,
-        rules_enabled: bool = False,
     ) -> None:
         self.action = action
         self.reason = reason
         self.proof = proof
         self.executor = executor
         self.min_role: RoleName = min_role
-        self.rules_enabled = rules_enabled
         self._reason_key = f"{action}_reason"
-        self._rules_key = f"{action}_rules"
-        self._rules_note_key = f"{action}_rules_note"
         self._proof_msgs_key = f"{action}_proof_msgs"
         self._extra_info_key = f"{action}_extra_info"
         self._prompt_chat_key = f"{action}_prompt_chat"
@@ -249,14 +230,7 @@ class _FlowBase:
         )
 
     async def _ignore_stale_callback(self, ctx: Ctx) -> None:
-        """Acknowledge a stale tap and release it to the flow that owns it.
-
-        The four moderation flows share the ``rules_step:*`` callback names.
-        Consuming a tap whose prompt identity does not match this action would
-        keep kick, mute, or warn from ever seeing their own button presses.
-        The owner answers once; a second answer to the same query id is
-        rejected by Telegram.
-        """
+        """Release a stale tap to another flow that may own the callback."""
         raise ContinuePropagation()
 
     def _clear_scope(self, ctx: Ctx) -> None:
@@ -554,24 +528,7 @@ class _ReasonStepMixin(_FlowBase):
         return await self._after_reason(ctx, prompt_txt)
 
     async def _after_reason(self, ctx: Ctx, prompt_txt: str) -> int:
-        """Move to the rules picker when rules exist, otherwise to proof."""
-        scope = flow_scope(ctx)
-        scope[self._rules_key] = []
-        locale = await locale_for_update(ctx)
-        if self.rules_enabled:
-            uid = ctx.effective_user.id if ctx.effective_user else 0
-            try:
-                may_pick = await db.users_roles.has_permission(uid, "rules.view")
-            except Exception as exc:
-                log.warning("rules.view lookup failed for %d: %s", uid, exc)
-                may_pick = False
-            published = await db.rules_db.published_rules() if may_pick else None
-            if published is not None and published.get("items"):
-                markup = rules_btn.picker_btn(published["items"], [], locale)
-                text = rules_picker.picker_text(published["items"], [], locale)
-                if await self._edit_prompt(ctx, text, markup):
-                    return WAITING_RULES
-                return ConversationHandler.END
+        """Move from the reason step straight to proof collection."""
         return await self._show_proof_prompt(ctx, prompt_txt)
 
     async def _on_reason_unexpected(self, ctx: Ctx) -> int:
@@ -596,139 +553,10 @@ class _ReasonStepMixin(_FlowBase):
         return WAITING_REASON
 
 
-# ─────────────────────── Rules picker step ──────────────────────── #
-
-
-class _RulesStepMixin(_FlowBase):
-    """Multi-select rules picker after the reason step."""
-
-    async def _picker_items(self) -> list[dict[str, Any]]:
-        published = await db.rules_db.published_rules()
-        return published["items"] if published else []
-
-    async def _render_picker(self, ctx: Ctx) -> int:
-        scope = flow_scope(ctx)
-        selected: list[int] = scope.get(self._rules_key, [])
-        locale = await locale_for_update(ctx)
-        items = await self._picker_items()
-        await self._edit_prompt(
-            ctx,
-            rules_picker.picker_text(items, selected, locale),
-            rules_btn.picker_btn(items, selected, locale),
-        )
-        return WAITING_RULES
-
-    async def _on_rules_toggle(self, ctx: Ctx) -> int | None:
-        q = ctx.callback_query
-        if q is None or q.data is None:
-            return WAITING_RULES
-        if not self._callback_is_live(ctx):
-            await self._ignore_stale_callback(ctx)
-            return None
-        item_id = rules_picker.item_id_from_callback(callback_text_of(q))
-        scope = flow_scope(ctx)
-        if item_id is not None:
-            scope[self._rules_key] = rules_picker.toggle(
-                scope.get(self._rules_key, []), item_id
-            )
-        await q.answer()
-        return await self._render_picker(ctx)
-
-    async def _on_rules_clear(self, ctx: Ctx) -> int | None:
-        q = ctx.callback_query
-        if q is None:
-            return WAITING_RULES
-        if not self._callback_is_live(ctx):
-            await self._ignore_stale_callback(ctx)
-            return None
-        flow_scope(ctx)[self._rules_key] = []
-        await q.answer()
-        return await self._render_picker(ctx)
-
-    async def _on_rules_done(self, ctx: Ctx) -> int | None:
-        q = ctx.callback_query
-        if q is None:
-            return WAITING_RULES
-        if not self._callback_is_live(ctx):
-            await self._ignore_stale_callback(ctx)
-            return None
-        scope = flow_scope(ctx)
-        locale = await locale_for_update(ctx)
-        if not scope.get(self._rules_key) and not scope.get(self._rules_note_key):
-            await q.answer(
-                t("rules.picker.require_selection", locale, plain=True), show_alert=True
-            )
-            return WAITING_RULES
-        await q.answer()
-        prompt_txt = self.proof.step_prompt(
-            self._get_target(scope, locale),
-            self.action,
-            scope.get(self._reason_key, ""),
-            scope.get(self._extra_info_key, ""),
-            locale,
-        )
-        return await self._show_proof_prompt(ctx, prompt_txt)
-
-    async def _on_rules_other(self, ctx: Ctx) -> int | None:
-        q = ctx.callback_query
-        if q is None:
-            return WAITING_RULES
-        if not self._callback_is_live(ctx):
-            await self._ignore_stale_callback(ctx)
-            return None
-        await q.answer()
-        # * Only the note requested by this tap may consume the next text.
-        flow_scope(ctx)[f"{self.action}_rules_note_awaiting"] = True
-        msg = ctx.effective_message
-        if msg is not None:
-            await reply_rich(
-                msg,
-                t("rules.picker.ask_note", await locale_for_update(ctx), plain=True),
-                log_label=f"{self.action} rules-note",
-                parse_mode=None,
-            )
-        return WAITING_RULES_NOTE
-
-    async def _on_rules_note_text(self, ctx: Ctx) -> int:
-        msg = ctx.effective_message
-        if msg is None or not msg.text:
-            return WAITING_RULES_NOTE
-        scope = flow_scope(ctx)
-        if not scope.get(f"{self.action}_target_id") or not scope.pop(
-            f"{self.action}_rules_note_awaiting", False
-        ):
-            raise ContinuePropagation()
-        note = msg.text.strip()
-        locale = await locale_for_update(ctx)
-        if not note or len(note) > MAX_RULES_NOTE_LEN:
-            await reply_rich(
-                msg,
-                t(
-                    "rules.picker.bad_note",
-                    locale,
-                    limit=MAX_RULES_NOTE_LEN,
-                    plain=True,
-                ),
-                log_label=f"{self.action} rules-note-limit",
-                parse_mode=None,
-            )
-            return WAITING_RULES_NOTE
-        scope = flow_scope(ctx)
-        scope[self._rules_note_key] = note
-        prompt_txt = self.proof.step_prompt(
-            self._get_target(scope, locale),
-            self.action,
-            scope.get(self._reason_key, ""),
-            scope.get(self._extra_info_key, ""),
-            locale,
-        )
-        return await self._show_proof_prompt(ctx, prompt_txt)
-
-
 # ─────────────────── ConversationHandler factory ────────────────── #
 
 
-class _ModActionFlow(_ReasonStepMixin, _RulesStepMixin, _ProofStepMixin, _FlowBase):
+class _ModActionFlow(_ReasonStepMixin, _ProofStepMixin, _FlowBase):
     """Per-action ConversationHandler state and callback container."""
 
     def build(
@@ -782,33 +610,6 @@ class _ModActionFlow(_ReasonStepMixin, _RulesStepMixin, _ProofStepMixin, _FlowBa
             WAITING_REASON: reason_state,
             WAITING_PROOF: proof_state,
         }
-        if self.rules_enabled:
-            states[WAITING_RULES] = [
-                CallbackQueryHandler(
-                    self._on_rules_toggle, pattern=r"^rules_step:pick:\d+$"
-                ),
-                CallbackQueryHandler(self._on_rules_done, pattern=r"^rules_step:done$"),
-                CallbackQueryHandler(
-                    self._on_rules_other, pattern=r"^rules_step:other$"
-                ),
-                CallbackQueryHandler(
-                    self._on_rules_clear, pattern=r"^rules_step:clear$"
-                ),
-                CallbackQueryHandler(self._on_cancel, pattern=r"^rules_step:cancel$"),
-                CallbackQueryHandler(
-                    self._on_cancel, pattern=rf"^{self.action}_cancel$"
-                ),
-            ]
-            states[WAITING_RULES_NOTE] = [
-                MessageHandler(
-                    filters.text & ~ALL_PREFIXES_CMD_FILTER, self._on_rules_note_text
-                ),
-                # * The picker's Cancel button stays visible after "Other".
-                CallbackQueryHandler(self._on_cancel, pattern=r"^rules_step:cancel$"),
-                CallbackQueryHandler(
-                    self._on_cancel, pattern=rf"^{self.action}_cancel$"
-                ),
-            ]
         return ConversationHandler(
             entry_points=[MessageHandler(entry_filter, entry_fn)],
             states=states,
@@ -833,15 +634,7 @@ def build_modaction_conv(
     escape_filter: BaseFilter | None = None,
     *,
     min_role: RoleName,
-    rules_enabled: bool = False,
 ) -> ConversationHandler:
-    """Build a generic reason + rules + proof ConversationHandler."""
-    flow = _ModActionFlow(
-        reason.action,
-        reason,
-        proof,
-        executor,
-        min_role,
-        rules_enabled=rules_enabled,
-    )
+    """Build a generic reason + proof ConversationHandler."""
+    flow = _ModActionFlow(reason.action, reason, proof, executor, min_role)
     return flow.build(entry_fn, entry_filter, escape_filter)

@@ -122,12 +122,6 @@ async def build_ban_detail(
         t("checking.ban_info.ban_id", locale, id=Safe(code(ban.get("ban_id", "")))),
         t("checking.ban_info.date", locale, date=Safe(date_str), time=Safe(time_str)),
     ]
-    linked = ban.get("rules") or []
-    if linked:
-        detail_items.append(
-            t("checking.ban_info.rules", locale, rules=", ".join(linked))
-        )
-
     field = t("checking.ban_info.table.field", locale)
     value = t("checking.ban_info.table.value", locale)
     rows = [
@@ -139,8 +133,6 @@ async def build_ban_detail(
         [t("checking.ban_info.table.ban_id", locale), detail_items[1]],
         [t("checking.ban_info.table.date", locale), detail_items[2]],
     ]
-    if linked:
-        rows.append([t("checking.ban_info.table.rules", locale), detail_items[3]])
     text = (
         f"{heading(t('checking.ban_info.heading', locale, plain=True), 3)}\n"
         f"{divider()}\n"

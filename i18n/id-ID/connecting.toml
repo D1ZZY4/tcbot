@@ -67,7 +67,7 @@ welcome_perm_missing = "Bot belum punya izin admin Welcome Messages yang baru. B
 # di halaman terakhir.
 [verify]
 welcome_title = "Terhubung ke {community}"
-welcome_intro = "Saya ditambahkan di sini untuk menjaga keamanan {community}. Menghubungkan grup ini membuat ban dan mute federasi ditegakkan otomatis di sini, sementara kick dan peringatan tetap di grup. Sebelum ada perubahan, pemilik grup meninjau beberapa poin dari aturan keanggotaan."
+welcome_intro = "Saya ditambahkan di sini untuk menjaga keamanan {community}. Menghubungkan grup ini membuat ban dan mute federasi ditegakkan otomatis di sini, sementara kick dan peringatan tetap di grup. Sebelum ada perubahan, pemilik grup meninjau beberapa poin keanggotaan."
 welcome_points_title = "Yang akan kita periksa bersama"
 welcome_point_1 = "Persetujuan admin grup ini tercatat di koordinator atau kanal resmi."
 welcome_point_2 = "Grup ini tercantum dalam daftar anggota federasi."

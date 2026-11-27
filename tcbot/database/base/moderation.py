@@ -26,8 +26,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 from ._shared import EMPTY_OBJECT, UTC_NOW, enum_check, metadata
 
-# * An investigation against one subject. A case holds the evidence and
-# * the rules; the action holds the decision.
+# * An investigation against one subject. A case holds the evidence; the
+# * action holds the decision.
 moderation_cases = Table(
     "moderation_cases",
     metadata,
@@ -116,54 +116,6 @@ Index("ix_moderation_cases_created", moderation_cases.c.created_at.desc())
 Index("ix_moderation_cases_assigned", moderation_cases.c.assigned_to_user_id)
 Index("ix_moderation_cases_opened_by", moderation_cases.c.opened_by_user_id)
 Index("ix_moderation_cases_closed_by", moderation_cases.c.closed_by_user_id)
-
-# * Which rules a case is about, and who linked them.
-moderation_case_rules = Table(
-    "moderation_case_rules",
-    metadata,
-    Column("case_id", BigInteger, nullable=False, autoincrement=False),
-    Column("rule_item_id", BigInteger, nullable=False, autoincrement=False),
-    Column("linked_by_user_id", BigInteger, nullable=True),
-    Column("attribution_source", Text, nullable=False, server_default="moderator"),
-    Column("note", Text, nullable=True),
-    Column(
-        "created_at", DateTime(timezone=True), nullable=False, server_default=UTC_NOW
-    ),
-    Column("context_chat_id", BigInteger, nullable=True),
-    PrimaryKeyConstraint("case_id", "rule_item_id"),
-    ForeignKeyConstraint(
-        ["case_id"],
-        ["moderation_cases.id"],
-        name="fk_moderation_case_rules_case",
-    ),
-    ForeignKeyConstraint(
-        ["rule_item_id"],
-        ["rule_items.id"],
-        name="fk_moderation_case_rules_rule_item",
-    ),
-    ForeignKeyConstraint(
-        ["linked_by_user_id"],
-        ["telegram_users.user_id"],
-        name="fk_moderation_case_rules_linked_by",
-    ),
-    ForeignKeyConstraint(
-        ["context_chat_id"],
-        ["telegram_chats.chat_id"],
-        name="fk_moderation_case_rules_context_chat",
-    ),
-    enum_check(
-        "ck_moderation_case_rules_attribution",
-        "attribution_source",
-        "moderator",
-        "system",
-        "automated",
-        "ai",
-    ),
-)
-
-Index("ix_moderation_case_rules_rule_item", moderation_case_rules.c.rule_item_id)
-Index("ix_moderation_case_rules_context_chat", moderation_case_rules.c.context_chat_id)
-Index("ix_moderation_case_rules_linked_by", moderation_case_rules.c.linked_by_user_id)
 
 # * One batch of archived evidence for one case.
 moderation_evidence_uploads = Table(

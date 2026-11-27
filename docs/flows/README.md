@@ -36,7 +36,6 @@ instead of repeating another domain's detail.
 | [Appeals](appeals.md) | Deep link and group tag, atomic submit and slot claim, reviewer windows, approve/reject, durable card edits. |
 | [Connection](connection.md) | Manual connect, bot-added flow, bounded replay, join enforcement, disconnect, primary group handling. |
 | [Roles](roles.md) | Direct promotion, queued Admin request, demotion triggers, atomic ownership transfer, request expiry. |
-| [Community rules](rules.md) | Draft editor, publication lease and reconciliation, member acknowledgement, shared moderation picker. |
 | [Check and statistics](statistics.md) | `/checkme` and `/check` drill-down trees, `/tcstats` panes, pagination, batched reads, access tiers. |
 
 ## Callback and state registry
@@ -51,20 +50,19 @@ exact names, owners, and styles.
 
 Each row names the authoritative page for one domain. Entry points, states,
 callbacks, tables, and workers are summarized here so a reader can find the
-right page without opening all eighteen.
+right page without opening all seventeen.
 
 | Flow | Entry | States | Main callbacks | Tables | Worker / retry |
 |---|---|---|---|---|---|
-| [Banning](banning.md) | `/tcban` | `WAITING_UPDATE_CONFIRM`, `WAITING_BAN_RULES`, `WAITING_BAN_RULES_NOTE`, `WAITING_PROOF` | `ban_continue`, `ban_done_proof`, `rules_step:*` | `moderation_actions`, `_cases`, `_evidence_*`, `moderation_enforcement_*` | enforcement worker, 3 attempts |
+| [Banning](banning.md) | `/tcban` | `WAITING_UPDATE_CONFIRM`, `WAITING_PROOF` | `ban_continue`, `ban_done_proof` | `moderation_actions`, `_cases`, `_evidence_*`, `moderation_enforcement_*` | enforcement worker, 3 attempts |
 | [Unbanning](unbanning.md) | `/tcunban`, appeal approve | none | `appeal_approve_*`, `appeal_reject_*` | `moderation_actions`, `moderation_appeals`, enforcement runs | revoke run, 3 attempts |
-| [Kicking](kicking.md) | `/tckick` | `WAITING_REASON`, `WAITING_PROOF`, `WAITING_RULES`, `WAITING_RULES_NOTE` | `kick_done_proof`, `kick_skip_proof`, `kick_cancel` | kick audit rows, `reconcile` run | reconcile run |
+| [Kicking](kicking.md) | `/tckick` | `WAITING_REASON`, `WAITING_PROOF` | `kick_done_proof`, `kick_skip_proof`, `kick_cancel` | kick audit rows, `reconcile` run | reconcile run |
 | [Muting](muting.md) | `/tcmute`, `/tcunmute` | shared reason states | `mute_done_proof`, `mute_skip_proof` | `moderation_actions`, `active_mutes`, enforcement runs | apply/revoke runs |
 | [Warning](warning.md) | `/tcwarn`, `/warns` | shared reason states | `warn_done_proof`, `warn_skip_proof` | `moderation_actions`, `warn_counts` | threshold ban apply run |
 | [Proof](proof.md) | shared by all four actions | proof sub-states | `<action>_done_proof`, `<action>_skip_proof` | `_evidence_uploads`, `_evidence_items` | session flush + archive |
 | [Appeals](appeals.md) | deep link, `#appeal`, review card | `WAITING_APPEAL` | `cancel_appeal`, `appeal_approve_*`, `appeal_reject_*` | `moderation_appeals`, notification outbox | notification worker, 5 attempts |
 | [Connection](connection.md) | `/tcconnect`, `MY_CHAT_MEMBER` | none | `tc_join`, `tc_cancel` | `connected_chats`, `join_requests`, replay runs | connect replay queue |
 | [Roles](roles.md) | `/tcpromote`, `/tcsetrole`, `/tcdemote`, `/transferowner` | none | `promo_role:*`, `role_change:*`, `demote_confirm:*`, `promo_approve:*` | `role_assignments`, `promotion_requests` | expiry job |
-| [Rules](rules.md) | `/tcrules`, `/rules` | `WAITING_EDITOR_MENU`, `WAITING_CONFIRM_DISCARD` | `rules_edit_draft`, `rules_publish`, `rules_ack:*` | `rule_*` tables | publication lease + reconciliation |
 | [Check and statistics](statistics.md) | `/checkme`, `/check`, `/tcstats` | none | `check_*`, `stats_*` | read-only across all domains | background identity/title refresh |
 
 Cross-cutting pages cover the rest: [permissions](permissions.md) and

@@ -79,8 +79,6 @@ async def _execute_ban_record(
     reason: str = meta.get(
         "ban_reason", replies.no_reason(meta.get("ban_locale"), plain=True)
     )
-    rule_ids: list[int] = list(meta.get("ban_rules") or [])
-    rule_note: str | None = meta.get("ban_rules_note")
     raw_origin = meta.get("ban_prompt_chat_id")  # negative = connected chat
     link_context = int(raw_origin) if raw_origin and int(raw_origin) < 0 else None
     bot_username = (await bot_identity(bot)).username or ""
@@ -114,8 +112,6 @@ async def _execute_ban_record(
                 destination_thread_id=proof_thread,
                 enforcement_chat_ids=enforcement_chat_ids,
                 origin_chat_id=link_context,
-                rule_item_ids=rule_ids,
-                rule_selection_note=rule_note,
             )
         else:
             written = await db.bans_db.create_ban(
@@ -131,8 +127,6 @@ async def _execute_ban_record(
                 destination_thread_id=proof_thread,
                 enforcement_chat_ids=enforcement_chat_ids,
                 origin_chat_id=link_context,
-                rule_item_ids=rule_ids,
-                rule_selection_note=rule_note,
             )
     except Exception:
         log.exception("Ban record write failed for ban_id=%s", ban_id)

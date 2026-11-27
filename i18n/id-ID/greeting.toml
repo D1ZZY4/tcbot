@@ -8,7 +8,7 @@ banned_group = "Ban federasi diterapkan saat join.\n*User:* {user}\n*ID:* {uid}\
 banned_dm = "Kamu di-ban federasi dari {community} dan di-ban di {group}.\n\nID Ban: {ban}\nAlasan: {reason}\n\nGunakan Lihat Log dan Lihat Bukti untuk detail. Jika kamu merasa ini keliru, Ajukan Banding."
 
 [welcome]
-body = "Selamat datang, {user}. Ini grup resmi {community}. Baca aturan grup sebelum ikut serta."
+body = "Selamat datang, {user}. Ini grup resmi {community}."
 
 [left]
 body = "{user} telah keluar."

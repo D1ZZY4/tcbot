@@ -28,7 +28,6 @@ SCHEMA_FILES: tuple[str, ...] = (
     "views.sql",
     "functions/identity.sql",
     "functions/rbac.sql",
-    "functions/rules.sql",
     "functions/moderation.sql",
     "functions/moderation_audit.sql",
     "functions/automation.sql",

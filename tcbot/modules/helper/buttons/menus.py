@@ -64,10 +64,9 @@ def open_pm_btn(
 ) -> InlineKeyboardMarkup | None:
     """One shared Open in PM button whose destination the caller chooses.
 
-    ``start`` is the deep-link argument. A start-menu surface passes ``menu``;
-    a rules surface may pass ``rules`` or ``tcrules``. Keeping the builder
-    shared while leaving the destination to the caller avoids both duplicated
-    builders and a hardcoded target that cannot fit every entry point.
+    ``start`` is the deep-link argument. A start-menu surface passes ``menu``.
+    Keeping the builder shared while leaving the destination to the caller
+    avoids duplicated builders and a hardcoded target.
     """
     if not bot_username:
         return None

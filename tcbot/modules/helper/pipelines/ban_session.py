@@ -36,9 +36,6 @@ BAN_USER_DATA_KEYS = (
     "ban_prompt_msg_id",
     "ban_prompt_chat_id",
     "ban_locale",
-    "ban_rules",
-    "ban_rules_note",
-    "ban_rules_note_awaiting",
 )
 WAITING_PROOF = 0
 WAITING_UPDATE_CONFIRM = 1

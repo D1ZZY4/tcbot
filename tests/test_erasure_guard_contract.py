@@ -113,4 +113,4 @@ def test_the_migration_chain_has_one_head() -> None:
         revisions[revision] = down
     parents = {down for down in revisions.values() if down}
     heads = set(revisions) - parents
-    assert heads == {"0022_forward_guarded_schema"}
+    assert heads == {"0023_remove_rules_feature"}

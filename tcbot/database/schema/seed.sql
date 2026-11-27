@@ -4,7 +4,7 @@
 -- * runtime across every apply_schema() call.
 INSERT INTO %SCHEMA%.community_settings (singleton_key, community, description, default_locale, timezone, settings) VALUES ('global', NULL, NULL, NULL, NULL, '{}') ON CONFLICT (singleton_key) DO NOTHING;
 
-INSERT INTO %SCHEMA%.role_definitions (role_key, display_name, priority, is_system, description) VALUES ('admin', 'Admin', 80, TRUE, 'Community administrator responsible for staff, moderation, groups, rules, and operations.'),
+INSERT INTO %SCHEMA%.role_definitions (role_key, display_name, priority, is_system, description) VALUES ('admin', 'Admin', 80, TRUE, 'Community administrator responsible for staff, moderation, groups, and operations.'),
     ('developer', 'Developer', 60, TRUE, 'Technical and operational staff role for development, diagnostics, and approved moderation tasks.'),
     ('moderator', 'Moderator', 40, TRUE, 'Community moderator handling day-to-day moderation tasks and group-level actions.'),
     ('owner', 'Owner', 100, TRUE, 'Single owner of the community with full administrative control.') ON CONFLICT (role_key) DO UPDATE SET display_name = EXCLUDED.display_name, priority = EXCLUDED.priority, is_system = EXCLUDED.is_system, description = EXCLUDED.description;
@@ -44,9 +44,7 @@ INSERT INTO %SCHEMA%.permission_definitions (permission_key, resource, descripti
     ('roles.review_promotion_requests', 'roles', 'Approve or reject promotion requests.'),
     ('roles.transfer_ownership', 'roles', 'Transfer federation ownership.'),
     ('roles.view', 'roles', 'View staff roles, permissions, and promotion history.'),
-    ('roles.view_promotion_requests', 'roles', 'List pending promotion requests.'),
-    ('rules.manage', 'rules', 'Create, edit, publish, and retire rule sets.'),
-    ('rules.view', 'rules', 'View community and chat rule sets and published versions.') ON CONFLICT (permission_key) DO UPDATE SET resource = EXCLUDED.resource, description = EXCLUDED.description;
+    ('roles.view_promotion_requests', 'roles', 'List pending promotion requests.') ON CONFLICT (permission_key) DO UPDATE SET resource = EXCLUDED.resource, description = EXCLUDED.description;
 
 INSERT INTO %SCHEMA%.role_permissions (role_key, permission_key) VALUES ('admin', 'audit.view'),
     ('admin', 'automation.manage'),
@@ -77,8 +75,6 @@ INSERT INTO %SCHEMA%.role_permissions (role_key, permission_key) VALUES ('admin'
     ('admin', 'roles.promote'),
     ('admin', 'roles.view'),
     ('admin', 'roles.view_promotion_requests'),
-    ('admin', 'rules.manage'),
-    ('admin', 'rules.view'),
     ('developer', 'audit.view'),
     ('developer', 'automation.view'),
     ('developer', 'groups.view'),
@@ -98,7 +94,6 @@ INSERT INTO %SCHEMA%.role_permissions (role_key, permission_key) VALUES ('admin'
     ('developer', 'moderation.view_history'),
     ('developer', 'moderation.warn'),
     ('developer', 'roles.view'),
-    ('developer', 'rules.view'),
     ('moderator', 'groups.view'),
     ('moderator', 'members.view'),
     ('moderator', 'moderation.collect_evidence'),
@@ -111,7 +106,6 @@ INSERT INTO %SCHEMA%.role_permissions (role_key, permission_key) VALUES ('admin'
     ('moderator', 'moderation.view_history'),
     ('moderator', 'moderation.warn'),
     ('moderator', 'roles.view'),
-    ('moderator', 'rules.view'),
     ('owner', 'audit.view'),
     ('owner', 'automation.manage'),
     ('owner', 'automation.publish'),
@@ -147,9 +141,7 @@ INSERT INTO %SCHEMA%.role_permissions (role_key, permission_key) VALUES ('admin'
     ('owner', 'roles.review_promotion_requests'),
     ('owner', 'roles.transfer_ownership'),
     ('owner', 'roles.view'),
-    ('owner', 'roles.view_promotion_requests'),
-    ('owner', 'rules.manage'),
-    ('owner', 'rules.view') ON CONFLICT (role_key, permission_key) DO NOTHING;
+    ('owner', 'roles.view_promotion_requests') ON CONFLICT (role_key, permission_key) DO NOTHING;
 
 INSERT INTO %SCHEMA%.retention_policies (target_table, data_class, retention_days, time_column, is_enabled, rationale) VALUES ('apscheduler_jobs', 'reference', NULL, NULL, TRUE, 'Reference data. Retained permanently.'),
     ('audit_events', 'history', NULL, NULL, TRUE, 'Decision history. Retained permanently; removal requires a legal and operator process.'),
@@ -169,7 +161,6 @@ INSERT INTO %SCHEMA%.retention_policies (target_table, data_class, retention_day
     ('join_requests', 'history', NULL, NULL, TRUE, 'Decision history. Retained permanently; removal requires a legal and operator process.'),
     ('moderation_actions', 'history', NULL, NULL, TRUE, 'Decision history. Retained permanently; removal requires a legal and operator process.'),
     ('moderation_appeals', 'history', NULL, NULL, TRUE, 'Decision history. Retained permanently; removal requires a legal and operator process.'),
-    ('moderation_case_rules', 'history', NULL, NULL, TRUE, 'Decision history. Retained permanently; removal requires a legal and operator process.'),
     ('moderation_cases', 'history', NULL, NULL, TRUE, 'Decision history. Retained permanently; removal requires a legal and operator process.'),
     ('moderation_enforcement_attempts', 'telemetry', 180, 'attempted_at', TRUE, 'Runtime telemetry. Kept for 180 days, then removed in a recorded batch.'),
     ('moderation_enforcement_runs', 'history', NULL, NULL, TRUE, 'Decision history. Retained permanently; removal requires a legal and operator process.'),
@@ -185,14 +176,6 @@ INSERT INTO %SCHEMA%.retention_policies (target_table, data_class, retention_day
     ('role_assignments', 'history', NULL, NULL, TRUE, 'Decision history. Retained permanently; removal requires a legal and operator process.'),
     ('role_definitions', 'reference', NULL, NULL, TRUE, 'Reference data. Retained permanently.'),
     ('role_permissions', 'reference', NULL, NULL, TRUE, 'Reference data. Retained permanently.'),
-    ('rule_acknowledgements', 'history', NULL, NULL, TRUE, 'Decision history. Retained permanently; removal requires a legal and operator process.'),
-    ('rule_categories', 'reference', NULL, NULL, TRUE, 'Reference data. Retained permanently.'),
-    ('rule_category_content', 'reference', NULL, NULL, TRUE, 'Reference data. Retained permanently.'),
-    ('rule_items', 'reference', NULL, NULL, TRUE, 'Reference data. Retained permanently.'),
-    ('rule_publication_runs', 'history', NULL, NULL, TRUE, 'Publication history. Retained permanently; removal requires a legal and operator process.'),
-    ('rule_publications', 'reference', NULL, NULL, TRUE, 'Reference data. Retained permanently.'),
-    ('rule_set_versions', 'reference', NULL, NULL, TRUE, 'Reference data. Retained permanently.'),
-    ('rule_sets', 'reference', NULL, NULL, TRUE, 'Reference data. Retained permanently.'),
     ('scheduled_job_runs', 'telemetry', 180, 'started_at', TRUE, 'Runtime telemetry. Kept for 180 days, then removed in a recorded batch.'),
     ('scheduled_jobs', 'reference', NULL, NULL, TRUE, 'Reference data. Retained permanently.'),
     ('telegram_chats', 'reference', NULL, NULL, TRUE, 'Reference data. Retained permanently.'),

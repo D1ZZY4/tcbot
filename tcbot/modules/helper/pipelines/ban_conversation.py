@@ -41,8 +41,6 @@ if TYPE_CHECKING:
 def ban_conversation(
     entry_fn: Callable[..., Any],
     entry_filter: BaseFilter,
-    *,
-    extra_states: dict[Any, list[Any]] | None = None,
 ) -> ConversationHandler:
     """Return the ban ConversationHandler with the given entry-point function."""
     states: dict[Any, list[Any]] = {
@@ -62,8 +60,6 @@ def ban_conversation(
             CallbackQueryHandler(on_cancel_proof, pattern=rf"^{proof.action}_cancel$"),
         ],
     }
-    if extra_states:
-        states.update(extra_states)
     return ConversationHandler(
         entry_points=[MessageHandler(entry_filter, entry_fn)],
         states=states,
@@ -76,7 +72,6 @@ def ban_conversation(
                 & ~build_conversation_escape_filter("tcban", "tcb"),
                 on_proof_timeout,
             ),
-            CallbackQueryHandler(on_cancel_proof, pattern=r"^rules_step:cancel$"),
             CallbackQueryHandler(on_cancel_proof, pattern=r"^ban_cancel$"),
         ],
         per_chat=True,

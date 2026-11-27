@@ -37,7 +37,7 @@ fail at load time with an actionable message. The template is
 | Variable | Default | Notes |
 |---|---|---|
 | `MAIN_GROUP` | unset | Primary community group id; must be negative. A positive value is treated as unset. |
-| `MAIN_CHANNEL` | unset | Rules publication target; must be negative. A positive value is treated as unset. |
+| `MAIN_CHANNEL` | unset | Main community channel behind the menu link; must be negative. A positive value is treated as unset. |
 | `LOGS` | unset | Federation log destination. |
 | `LOGS_ERRORS` | unset | Separate error destination; falls back to the Owner DM when empty. |
 | `APPEALS` | unset | Appeal destination. |

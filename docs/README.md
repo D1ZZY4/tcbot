@@ -50,13 +50,11 @@ state machine, database writes, Telegram delivery, failure paths, and exact name
 | [Appeals](flows/appeals.md) | Deep link and group tag, atomic claim, reviewer windows, durable card edits. |
 | [Connection](flows/connection.md) | Connect, bounded replay, join enforcement, disconnect, primary groups. |
 | [Roles](flows/roles.md) | Promotion, queued request, demotion, atomic ownership transfer. |
-| [Community rules](flows/rules.md) | Editor, publication lease, acknowledgment, shared picker. |
 | [Check and statistics](flows/statistics.md) | Drill-down trees, pagination, batched reads, access tiers. |
 
 ### Features
 
 - [Language](features/language.md) - locale resolution, TOML catalog, selection flow.
-- [Community rules](features/rules.md) - editor, publication, acknowledgement, shared picker.
 
 ### Reference
 

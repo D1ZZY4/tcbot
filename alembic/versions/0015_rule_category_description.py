@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from sqlalchemy import text
+
 from alembic import op
 
 if TYPE_CHECKING:
@@ -31,10 +33,16 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Add the optional presentation column to the category catalogue."""
-    op.execute(
-        "ALTER TABLE rule_categories ADD COLUMN IF NOT EXISTS description text NULL"
+    """Add the optional presentation column where the category catalogue exists."""
+    exists = (
+        op.get_bind()
+        .execute(text("SELECT to_regclass('rule_categories') IS NOT NULL"))
+        .scalar()
     )
+    if exists:
+        op.execute(
+            "ALTER TABLE rule_categories ADD COLUMN IF NOT EXISTS description text NULL"
+        )
 
 
 def downgrade() -> None:

@@ -6,7 +6,7 @@ listed in the [flow index](README.md). The main domain pages are
 [Banning](banning.md), [Unbanning](unbanning.md), [Kicking](kicking.md),
 [Muting](muting.md), [Warning](warning.md), [Proof](proof.md),
 [Appeals](appeals.md), [Connection](connection.md), [Roles](roles.md),
-[Community rules](rules.md), and [Check and statistics](statistics.md).
+and [Check and statistics](statistics.md).
 
 ## Topology
 

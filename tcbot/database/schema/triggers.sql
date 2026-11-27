@@ -63,12 +63,6 @@ CREATE TRIGGER trg_connected_chats_ensure_settings AFTER INSERT ON %SCHEMA%.conn
 
 CREATE TRIGGER trg_connected_chats_validate_chat_type BEFORE INSERT OR UPDATE OF chat_id ON %SCHEMA%.connected_chats FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.validate_connected_chat_chat_type();
 
-CREATE TRIGGER trg_ensure_published_rule_acknowledgement BEFORE INSERT OR UPDATE ON %SCHEMA%.rule_acknowledgements FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.ensure_published_rule_acknowledgement();
-
-CREATE TRIGGER trg_guard_rule_item_draft_only BEFORE INSERT OR DELETE OR UPDATE ON %SCHEMA%.rule_items FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.guard_rule_item_draft_only();
-
-CREATE TRIGGER trg_guard_rule_set_version_changes BEFORE INSERT OR DELETE OR UPDATE ON %SCHEMA%.rule_set_versions FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.guard_rule_set_version_changes();
-
 CREATE TRIGGER trg_join_requests_lifecycle BEFORE INSERT OR UPDATE ON %SCHEMA%.join_requests FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.guard_join_request_lifecycle();
 
 CREATE TRIGGER trg_join_requests_prevent_delete BEFORE DELETE ON %SCHEMA%.join_requests FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.prevent_historical_record_delete();
@@ -92,10 +86,6 @@ CREATE TRIGGER trg_moderation_appeals_lifecycle BEFORE INSERT OR UPDATE ON %SCHE
 CREATE TRIGGER trg_moderation_appeals_prevent_delete BEFORE DELETE ON %SCHEMA%.moderation_appeals FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.prevent_historical_record_delete();
 
 CREATE TRIGGER trg_moderation_appeals_prevent_truncate BEFORE TRUNCATE ON %SCHEMA%.moderation_appeals FOR EACH STATEMENT EXECUTE FUNCTION %SCHEMA%.prevent_historical_record_delete();
-
-CREATE TRIGGER trg_moderation_case_rules_prevent_delete BEFORE DELETE ON %SCHEMA%.moderation_case_rules FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.prevent_historical_record_delete();
-
-CREATE TRIGGER trg_moderation_case_rules_prevent_truncate BEFORE TRUNCATE ON %SCHEMA%.moderation_case_rules FOR EACH STATEMENT EXECUTE FUNCTION %SCHEMA%.prevent_historical_record_delete();
 
 CREATE TRIGGER trg_moderation_cases_guard_insert BEFORE INSERT ON %SCHEMA%.moderation_cases FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.guard_moderation_case_insert();
 
@@ -165,18 +155,6 @@ CREATE TRIGGER trg_role_definitions_guard_system BEFORE DELETE OR UPDATE ON %SCH
 
 CREATE TRIGGER trg_role_definitions_prevent_truncate BEFORE TRUNCATE ON %SCHEMA%.role_definitions FOR EACH STATEMENT EXECUTE FUNCTION %SCHEMA%.prevent_historical_record_delete();
 
-CREATE TRIGGER trg_rule_acknowledgements_append_only BEFORE DELETE OR UPDATE ON %SCHEMA%.rule_acknowledgements FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.guard_rule_acknowledgement_history();
-
-CREATE TRIGGER trg_rule_set_versions_set_updated_at BEFORE UPDATE ON %SCHEMA%.rule_set_versions FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.set_updated_at();
-
-CREATE TRIGGER trg_rule_sets_guard_identity BEFORE UPDATE ON %SCHEMA%.rule_sets FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.guard_rule_set_identity();
-
-CREATE TRIGGER trg_rule_sets_prevent_delete BEFORE DELETE ON %SCHEMA%.rule_sets FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.prevent_historical_record_delete();
-
-CREATE TRIGGER trg_rule_sets_prevent_truncate BEFORE TRUNCATE ON %SCHEMA%.rule_sets FOR EACH STATEMENT EXECUTE FUNCTION %SCHEMA%.prevent_historical_record_delete();
-
-CREATE TRIGGER trg_rule_sets_set_updated_at BEFORE UPDATE ON %SCHEMA%.rule_sets FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.set_updated_at();
-
 CREATE TRIGGER trg_scheduled_job_runs_guard BEFORE INSERT OR DELETE OR UPDATE ON %SCHEMA%.scheduled_job_runs FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.guard_scheduled_job_run();
 
 CREATE TRIGGER trg_scheduled_jobs_set_updated_at BEFORE UPDATE ON %SCHEMA%.scheduled_jobs FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.set_updated_at();
@@ -196,7 +174,3 @@ CREATE TRIGGER trg_set_updated_at BEFORE UPDATE ON %SCHEMA%.user_settings FOR EA
 CREATE TRIGGER trg_telegram_chats_guard_chat_type BEFORE UPDATE OF chat_type ON %SCHEMA%.telegram_chats FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.guard_telegram_chat_type_change();
 
 CREATE TRIGGER trg_telegram_users_guard_erased_identity BEFORE UPDATE OF username, first_name, last_name, language_code, is_premium ON %SCHEMA%.telegram_users FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.guard_erased_user_identity();
-
-CREATE TRIGGER trg_validate_moderation_case_rule_scope BEFORE INSERT OR UPDATE ON %SCHEMA%.moderation_case_rules FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.validate_moderation_case_rule_scope();
-
-CREATE TRIGGER trg_validate_rule_publication_scope BEFORE INSERT OR UPDATE ON %SCHEMA%.rule_publications FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.validate_rule_publication_scope();

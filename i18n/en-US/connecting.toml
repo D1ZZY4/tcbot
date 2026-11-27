@@ -66,7 +66,7 @@ welcome_perm_missing = "The bot does not have the new Welcome Messages admin rig
 # blocks and Prev/Next navigation; Connect appears only on the last page.
 [verify]
 welcome_title = "Connected to {community}"
-welcome_intro = "I was added here to help keep {community} safe. Connecting this group means federation bans and mutes are enforced here automatically, while kicks and warnings stay local. Before anything changes, the group owner reviews a few points from our membership rules."
+welcome_intro = "I was added here to help keep {community} safe. Connecting this group means federation bans and mutes are enforced here automatically, while kicks and warnings stay local. Before anything changes, the group owner reviews a few points about membership."
 welcome_points_title = "What we will check together"
 welcome_point_1 = "This group's admin approval is on record with the coordinators or the official channel."
 welcome_point_2 = "The group is listed among the federation members."
