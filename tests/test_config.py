@@ -235,6 +235,20 @@ def test_parse_list_drops_blank_entries_in_both_forms() -> None:
     assert parse_list("['bans', '', '  ']") == ["bans"]
     assert parse_list("bans,,") == ["bans"]
     assert parse_list("[1, None, 'bans']") == ["1", "None", "bans"]
+    # * Quoted blanks are emptied by the quote strip, so they must be
+    # * discarded after it rather than before.
+    assert parse_list("'/', ''") == ["/"]
+    assert parse_list("['/', '']") == ["/"]
+
+
+def test_parse_list_warns_on_non_list_literal(caplog: pytest.LogCaptureFixture) -> None:
+    """A tuple-shaped value warns instead of silently losing its entries.
+
+    INFRA_CHAT_IDS built from a tuple would otherwise fall back to CSV, split
+    the parentheses into garbage, and drop every infrastructure chat id.
+    """
+    assert parse_list("('-1001234567890',)") == ["('-1001234567890", ")"]
+    assert "expected a list literal, got tuple" in caplog.text
 
 
 def test_env_fallbacks_use_documented_defaults(

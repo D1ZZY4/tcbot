@@ -62,9 +62,11 @@ def _filter_modules(modules: list[str]) -> list[str]:
             raise SystemExit(1)
 
     if to_load:
-        # * A repeated name would import once but register the same handlers
-        # * twice, so keep the first occurrence of each name.
-        modules = [m for m in dict.fromkeys(to_load) if m in modules]
+        # * Filter discovery order instead of following the operator's list:
+        # * same-group handlers resolve in registration order, so a config
+        # * reorder must not silently change which overlapping filter wins.
+        allowed = dict.fromkeys(to_load)
+        modules = [m for m in modules if m in allowed]
     if no_load:
         log.info("Not loading modules: %s", no_load)
         modules = [m for m in modules if m not in no_load]

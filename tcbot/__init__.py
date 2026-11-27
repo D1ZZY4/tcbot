@@ -75,15 +75,25 @@ def parse_list(raw: str) -> list[str]:
     try:
         parsed = ast.literal_eval(raw)
         if isinstance(parsed, list):
-            # * Drop blank entries in both forms: the CSV branch already does,
+            # * Drop blank entries in both forms: the CSV branch does it too,
             # * and MODULES_LOAD treats an empty name as an invalid module.
             return [value for item in parsed if (value := str(item).strip())]
+        # * A tuple or scalar is a plausible reading of "Python-style list",
+        # * but CSV splitting it would produce garbage entries. For
+        # * INFRA_CHAT_IDS that silently discards the whole guard, so the
+        # * fallback has to be operator-visible.
+        log.warning(
+            "parse_list expected a list literal, got %s; falling back to CSV.",
+            type(parsed).__name__,
+        )
     except (ValueError, SyntaxError) as exc:
         # * This fallback can change command prefixes, registered modules, and
         # * the infrastructure-chat guard, so it must be visible at INFO level.
         log.warning("parse_list falling back to CSV parsing: %s", exc)
     items = raw.strip("[]").split(",")
-    return [item.strip().strip("'\"") for item in items if item.strip()]
+    # * Strip quotes before the truthiness check: an empty quoted entry would
+    # * otherwise survive as "" and become an empty prefix or module name.
+    return [value for item in items if (value := item.strip().strip("'\""))]
 
 
 def parse_port(port_str: str) -> int:
