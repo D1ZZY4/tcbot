@@ -185,6 +185,62 @@ def test_no_record_replies_without_touching_chats(
     ]
 
 
+def test_command_replies_with_a_no_record_notice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A role-less user with no active ban still gets a visible reply.
+
+    An empty rich payload is dropped by the transport, so the command entry
+    path must use the same no-record notice as the executor.
+    """
+    msg, bot = _FakeMsg(), _FakeBot()
+    msg.text = "/tcunban 42"
+    msg.chat = SimpleNamespace(id=-100, type="supergroup")
+
+    async def _locale(update: object) -> str:
+        return "en-US"
+
+    async def _origin(*args: Any, **kwargs: Any) -> bool:
+        return True
+
+    async def _target(ctx: Any, args: Any, client: Any) -> tuple[int, str]:
+        _ = (ctx, args, client)
+        return 42, "T"
+
+    async def _identify(*args: Any, **kwargs: Any) -> Identity:
+        _ = (args, kwargs)
+        return Identity(kind="user", target_id=42, fname="T")
+
+    async def _no_ban(user_id: int) -> None:
+        _ = user_id
+
+    async def _allow(*args: Any, **kwargs: Any) -> None:
+        _ = (args, kwargs)
+
+    async def _owner_id(*, fresh: bool = False) -> int:
+        _ = fresh
+        return 999
+
+    async def _role(uid: int, *, fresh: bool = False) -> str | None:
+        _ = (uid, fresh)
+        return "developer"
+
+    monkeypatch.setattr(db.users_roles, "get_owner_id", _owner_id)
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(unban, "locale_for_update", _locale)
+    monkeypatch.setattr(unban.guards, "require_federation_origin", _origin)
+    monkeypatch.setattr(unban.extraction, "extract_target", _target)
+    monkeypatch.setattr(unban.identity, "classify", _identify)
+    monkeypatch.setattr(db.bans_db, "get_active_ban", _no_ban)
+    monkeypatch.setattr(unban, "resolve_and_check", _allow)
+
+    asyncio.run(unban.cmd_unban(_update(msg, _admin()), _ctx(bot)))
+
+    assert msg.replies == [
+        t("unbanning.note.no_record", "en-US", user=Safe(user_ref(42, "T")))
+    ]
+
+
 def test_a_final_rank_refusal_blocks_the_revocation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -206,7 +206,14 @@ async def cmd_unban(ctx: Ctx) -> None:
                 )
                 ban_record = None
         if ban_record is None:
-            await reply_rich(msg, refusal or "", log_label="unban refusal")
+            # * A role-less target has no refusal line. Send the shared no-record
+            # * notice instead of an empty payload, which the rich transport drops.
+            notice = refusal or t(
+                "unbanning.note.no_record",
+                locale,
+                user=Safe(user_ref(target_id, target_fname or str(target_id))),
+            )
+            await reply_rich(msg, notice, log_label="unban refusal")
             return
         # * The classification and the role read are two separate fresh
         # * reads. When they disagree on a promotion, either one proves a
