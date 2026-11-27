@@ -138,14 +138,20 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 | `MTPROTO_SESSION` | Namespace for the shared MTProto session in PostgreSQL (default `tcbot_mtproto`). |
 | `SENTRY_DSN` | Optional Sentry DSN for error monitoring; empty disables monitoring. |
 
+### Testing and local services
+
+| Variable | Required | Description |
+|---|---|---|
+| `TCBOT_TEST_DATABASE_URL` | No | Dedicated PostgreSQL URL for the `postgres`-marked tests; those tests skip when it is unset. Never point this at the deployment database. |
+| `TCBOT_TEST_REDIS_URL` | No | Dedicated Redis URL for the Redis integration tests; those tests skip when it is unset. Keep it separate from `REDIS_URL`. |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Compose only | Local `docker-compose.yml` PostgreSQL service settings. The bot reads `DATABASE_URL`, never these values. |
+
 ### Community links
 
 The Additional Links menu derives its buttons from `MAIN_CHANNEL`, `MAIN_GROUP`,
 `LOGS`, and `APPEALS` through Telegram `get_chat`: a chat username becomes a
 `t.me` link, otherwise its invite link is used, and a chat with neither drops
-its button. No static community URL variables remain. See
-[Community rules](docs/features/rules.md) for the rules editor and channel
-publication.
+its button. No static community URL variables remain.
 
 </details>
 

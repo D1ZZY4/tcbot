@@ -77,6 +77,7 @@ remain.
 | Variable | Default | Notes |
 |---|---|---|
 | `TCBOT_TEST_DATABASE_URL` | unset | Database used by the `postgres`-marked tests. When unset those tests skip. Use a dedicated test database, never the deployment one. |
+| `TCBOT_TEST_REDIS_URL` | unset | Redis used by the Redis integration tests. When unset those tests skip. Use a dedicated test instance, never the deployment cache. |
 
 `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` are `docker-compose.yml`
 variables, not read by the bot. Compose refuses to start the local PostgreSQL

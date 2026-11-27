@@ -91,6 +91,7 @@ only when the PR was created.
 | `MODULES_LOAD`, `MODULES_NO_LOAD`, `SENTRY_DSN`, `KURIGRAM_WORKERS` | Runner | Optional features. Unset `KURIGRAM_WORKERS` keeps automatic sizing. |
 | `BOT_PAT` | Runner, dependency updates | Self-chain dispatch and PR fallback. |
 | `TCBOT_TEST_DATABASE_URL` | Test job | Local PostgreSQL service URL for the `postgres`-marked tests; not a production secret. |
+| `TCBOT_TEST_REDIS_URL` | Test job | Local Redis service URL for the Redis integration tests; not a production secret. |
 
 `GITHUB_TOKEN` and `secrets.GITHUB_TOKEN` are provided automatically.
 
