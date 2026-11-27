@@ -40,6 +40,9 @@ if str(_ROOT) not in sys.path:
 from scripts import rules_import  # noqa: E402
 from tcbot import database as db  # noqa: E402
 from tcbot.database import engine as db_engine  # noqa: E402
+from tcbot.modules.helper.pipelines.rules_markdown import (  # noqa: E402
+    _category_key,
+)
 from tcbot.utils.logger import get_logger  # noqa: E402
 
 log = get_logger("tcbot.seed_rules")
@@ -61,8 +64,8 @@ _RETIRED_KEYS: frozenset[str] = frozenset(
 
 
 def _category(filename: str) -> str:
-    """Return the document stem as the stable category key."""
-    return Path(filename).stem
+    """Return a callback-safe category key from the document filename."""
+    return _category_key(filename)
 
 
 async def _seed(folder: Path, user_id: int, *, dry_run: bool) -> int:

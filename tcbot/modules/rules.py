@@ -24,7 +24,7 @@ from tcbot.modules.helper.pipelines.rules_editor import build_rules_conv
 from tcbot.modules.helper.rich import edit_msg as rich_edit
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.prefixes import build_prefixed_filters
+from tcbot.utils.prefixes import build_prefixed_arg_filters, build_prefixed_filters
 
 log = get_logger(__name__)
 
@@ -117,7 +117,7 @@ async def _acknowledge(ctx: Ctx) -> None:
         # * (the working-locale published version); comparing against the
         # * reader-locale published version told non-default-locale members their
         # * freshly generated button was outdated, so they could never accept.
-        requirement = await db.rules_db.acknowledgement_requirement()
+        requirement = await db.rules_db.acknowledgement_requirement(locale)
         if requirement is None or int(requirement[0]) != version_id:
             await query.answer(
                 t("rules.ack.outdated", locale, plain=True), show_alert=True
@@ -371,7 +371,7 @@ _RULES_CMDS = build_prefixed_filters("rules")
 
 # * The Open in PM button on the group surface uses a deep link, so the
 # * reader lands directly on the public rules menu instead of the start menu.
-_RULES_START = filters.private & filters.regex(r"^/start\s+rules$")
+_RULES_START = filters.private & build_prefixed_arg_filters("start", r"rules")
 
 __handlers__ = [
     MessageHandler(_RULES_START, cmd_rules),

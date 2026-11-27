@@ -61,7 +61,10 @@ async def add_category(set_id: int, key: str, title: str) -> dict[str, Any]:
     """Add a category, resolving a slug collision with a numeric suffix."""
     rows = await list_categories(set_id)
     used = {str(row["category_key"]) for row in rows}
-    final_key = key if key not in used else _available_key(title, used)
+    # * Normalize every incoming key, including one derived from an uploaded
+    # * filename: a long key would push editor callbacks past the 64-byte
+    # * rich-button limit and force the whole keyboard to native markup.
+    final_key = _available_key(key, used)
     next_order = max((int(row["sort_order"]) for row in rows), default=0) + 10
     created = await db_call(
         lambda: run_returning(

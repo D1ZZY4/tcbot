@@ -20,7 +20,7 @@ from tcbot.database.base import (
     rule_set_versions,
     rule_sets,
 )
-from tcbot.database.engine import db_call, fetch_all, fetch_one
+from tcbot.database.engine import db_call, fetch_all, fetch_one, run_returning
 from tcbot.database.rules_db.sets import WORKING_LOCALE
 from tcbot.utils.time_and_date import utc_now
 
@@ -149,34 +149,44 @@ async def published_rules(
     }
 
 
-async def acknowledgement_requirement() -> tuple[int, bool] | None:
-    """Return the published version id and its acknowledgement requirement.
+async def acknowledgement_requirement(
+    locale: str | None = None,
+) -> tuple[int, bool] | None:
+    """Return the published version id and acknowledgement flag for a reader.
 
-    The join greeting only needs these two fields. Reading them in one
-    statement avoids loading the whole item and category catalog on every
-    join in the primary group.
+    The version must be the one the reader actually sees in `/rules`: the
+    reader locale first, then the working-locale fallback used by
+    :func:`published_rules`. Button construction and tap validation both use
+    this helper, so they cannot disagree about the authoritative version.
     """
-    row = await db_call(
-        lambda: fetch_one(
-            select(
-                rule_set_versions.c.id.label("version_id"),
-                rule_sets.c.requires_acknowledgement,
-            )
-            .select_from(
-                rule_set_versions.join(
-                    rule_sets, rule_set_versions.c.rule_set_id == rule_sets.c.id
+
+    async def _read(content_locale: str) -> dict[str, Any] | None:
+        return await db_call(
+            lambda: fetch_one(
+                select(
+                    rule_set_versions.c.id.label("version_id"),
+                    rule_sets.c.requires_acknowledgement,
                 )
+                .select_from(
+                    rule_set_versions.join(
+                        rule_sets, rule_set_versions.c.rule_set_id == rule_sets.c.id
+                    )
+                )
+                .where(
+                    rule_sets.c.scope_type == "community",
+                    rule_sets.c.is_active.is_(True),
+                    rule_set_versions.c.locale == content_locale,
+                    rule_set_versions.c.status == "published",
+                )
+                .order_by(rule_set_versions.c.id.desc())
+                .limit(1)
             )
-            .where(
-                rule_sets.c.scope_type == "community",
-                rule_sets.c.is_active.is_(True),
-                rule_set_versions.c.locale == WORKING_LOCALE,
-                rule_set_versions.c.status == "published",
-            )
-            .order_by(rule_set_versions.c.id.desc())
-            .limit(1)
         )
-    )
+
+    content_locale = locale or WORKING_LOCALE
+    row = await _read(content_locale)
+    if row is None and content_locale != WORKING_LOCALE:
+        row = await _read(WORKING_LOCALE)
     if row is None:
         return None
     return int(row["version_id"]), bool(row["requires_acknowledgement"])
@@ -214,8 +224,10 @@ async def record_acknowledgement(
     message_id: int | None,
 ) -> bool:
     """Insert one acknowledgement; duplicate taps are safe."""
+    # * An acknowledgement is an insert, so it belongs on the write boundary
+    # * even though the returned id is only used as a presence flag.
     result = await db_call(
-        lambda: fetch_all(
+        lambda: run_returning(
             pg_insert(rule_acknowledgements)
             .values(
                 rule_set_version_id=version_id,

@@ -37,7 +37,10 @@ from tcbot.modules.helper.rich.edit_msg import callback_text_of
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import canonical_locale, display_name, t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
+from tcbot.utils.prefixes import (
+    ALL_PREFIXES_CMD_FILTER,
+    build_prefixed_arg_filters,
+)
 
 log = get_logger(__name__)
 
@@ -264,7 +267,7 @@ rules_editor = RulesEditor()
 
 def build_rules_conv() -> ConversationHandler:
     """Build the single-state editor conversation used by ``/tcrules``."""
-    _TCRULES_START = filters.private & filters.regex(r"^/start\s+tcrules$")
+    _TCRULES_START = filters.private & build_prefixed_arg_filters("start", r"tcrules")
     return ConversationHandler(
         entry_points=[
             MessageHandler(_TCRULES_CMDS, rules_editor.start),

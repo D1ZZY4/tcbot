@@ -35,6 +35,18 @@ _ITALIC = re.compile(r"(?<!\*)\*([^*\n]+)\*(?!\*)|_([^_\n]+)_")
 _INLINE_CODE = re.compile(r"`([^`\n]+)`")
 _LINK = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 
+# * The key is embedded in editor callbacks such as "rules_cat_rename:<key>".
+# * Keeping it at 40 lowercase characters leaves every callback under the
+# * 64-byte rich-button limit, so the editor keyboard stays on the rich path.
+_CATEGORY_KEY_MAX = 40
+
+
+def _category_key(filename: str) -> str:
+    """Return a callback-safe category key derived from an uploaded filename."""
+    stem = filename.rsplit(".", 1)[0]
+    key = re.sub(r"[^a-z0-9]+", "-", stem.lower()).strip("-")[:_CATEGORY_KEY_MAX]
+    return key or "category"
+
 
 def _inline(text: str) -> str:
     """Convert inline Markdown to rich HTML, escaping everything else."""
@@ -55,7 +67,7 @@ def _inline(text: str) -> str:
 def parse_document(text: str, filename: str = "rules.md") -> list[dict[str, Any]]:
     """Split one Markdown document into editable rule items."""
     stem = filename.rsplit(".", 1)[0]
-    category = stem
+    category = _category_key(filename)
     category_title = stem.replace("-", " ").title()
     title = ""
     items: list[dict[str, Any]] = []
