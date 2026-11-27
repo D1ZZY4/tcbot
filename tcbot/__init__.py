@@ -289,7 +289,9 @@ def _infra_chat_ids_from_env() -> tuple[int, ...]:
         if value < 0:
             ids.append(value)
         else:
-            log.warning("Ignoring positive INFRA_CHAT_IDS entry.")
+            log.warning(
+                "Ignoring non-negative INFRA_CHAT_IDS entry; only negative chat ids apply."
+            )
     return tuple(dict.fromkeys(ids))
 
 
