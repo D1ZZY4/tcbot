@@ -403,8 +403,8 @@ def test_rich_embeds_keyboard_as_rich_buttons() -> None:
     assert message == {"html": "<p>body</p>"}
 
 
-def test_an_unconvertible_keyboard_is_forwarded_as_native_markup() -> None:
-    """One overlong callback keeps the whole keyboard, not zero buttons."""
+def test_an_unconvertible_keyboard_is_not_sent_as_a_native_markup() -> None:
+    """Every message stays rich; an unconvertible keyboard is dropped."""
     markup = {"inline_keyboard": [[{"text": "Long", "callback_data": "x" * 65}]]}
     bot = _FakeBot()
     asyncio.run(
@@ -413,7 +413,7 @@ def test_an_unconvertible_keyboard_is_forwarded_as_native_markup() -> None:
         )
     )
     kwargs = bot.calls[0][1]
-    assert kwargs["reply_markup"] is markup
+    assert "reply_markup" not in kwargs
     assert "<tg-button-row>" not in kwargs["rich_message"].html
 
 
@@ -433,8 +433,8 @@ def test_a_link_style_url_button_drops_the_style_instead_of_raising() -> None:
     assert 'style="link"' not in html
 
 
-def test_a_profile_button_keeps_the_native_keyboard() -> None:
-    """A native action without a rich equivalent must stay clickable."""
+def test_a_native_only_button_is_not_sent_as_a_native_keyboard() -> None:
+    """A native action without a rich equivalent cannot add a second transport."""
     markup = InlineKeyboardMarkup([[InlineKeyboardButton("Profile", user_id=42)]])
     bot = _FakeBot()
     asyncio.run(
@@ -443,7 +443,7 @@ def test_a_profile_button_keeps_the_native_keyboard() -> None:
         )
     )
     kwargs = bot.calls[0][1]
-    assert kwargs["reply_markup"] is markup
+    assert "reply_markup" not in kwargs
     assert '<tg-button type="disabled">' not in kwargs["rich_message"].html
 
 

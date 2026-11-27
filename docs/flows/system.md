@@ -138,9 +138,10 @@ and `moderation_enforcement_attempts`.
 
 User-facing messages render through `rich/send_msg.py`, `rich/reply_msg.py`,
 `rich/edit_msg.py`, and `rich/forward_msg.py`. Text sends, replies, and edits use
-Kurigram's native `InputRichMessage`. Keyboards are rich buttons; cells that
-cannot be expressed as rich buttons keep their inline representation on the same
-rich message, never on a second transport. Forwards keep the original sender
+Kurigram's native `InputRichMessage`. Keyboards are rich buttons only; a markup
+that cannot be converted is dropped with an ERROR, never sent as a native
+keyboard. Explicit keyboard clearing still uses an empty native markup because
+Telegram has no rich equivalent. Forwards keep the original sender
 header and are owned by `forward_rich`. Plain notices and callback alerts are
 rendered as text inside a rich payload. No parse mode is used anywhere. Every decision
 commits to PostgreSQL before any Telegram call, and unfinished per-group

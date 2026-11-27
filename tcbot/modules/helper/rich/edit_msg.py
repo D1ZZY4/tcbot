@@ -45,10 +45,8 @@ async def edit_rich(
     clear_markup: bool = False,
 ) -> Message:
     """Edit a message through Kurigram's native rich-message transport."""
-    payload, fallback = _message_with_buttons(message, reply_markup)
+    payload = _message_with_buttons(message, reply_markup)
     extra: dict[str, Any] = {}
-    if fallback is not None:
-        extra["reply_markup"] = fallback
     if clear_markup:
         extra["reply_markup"] = InlineKeyboardMarkup([])
     return await bot.edit_message_text(
@@ -104,11 +102,9 @@ async def safe_edit(
     """Edit a message as a rich message; swallow harmless not-modified errors."""
     _ = parse_mode
     markup = kwargs.get("reply_markup")
-    payload, fallback = _message_with_buttons(html_message(text), markup)
+    payload = _message_with_buttons(html_message(text), markup)
     extra: dict[str, Any] = {}
-    if fallback is not None:
-        extra["reply_markup"] = fallback
-    elif "reply_markup" in kwargs and not _markup_has_buttons(markup):
+    if "reply_markup" in kwargs and not _markup_has_buttons(markup):
         # * Omitting the key leaves the old keyboard; an explicit None or empty
         # * markup is the caller's request to remove it.
         extra["reply_markup"] = InlineKeyboardMarkup([])
@@ -137,11 +133,9 @@ async def safe_edit_cb(
     """Edit a callback-query message, returning whether the edit landed."""
     _ = parse_mode
     markup = kwargs.get("reply_markup")
-    payload, fallback = _message_with_buttons(html_message(text), markup)
+    payload = _message_with_buttons(html_message(text), markup)
     extra: dict[str, Any] = {}
-    if fallback is not None:
-        extra["reply_markup"] = fallback
-    elif "reply_markup" in kwargs and not _markup_has_buttons(markup):
+    if "reply_markup" in kwargs and not _markup_has_buttons(markup):
         extra["reply_markup"] = InlineKeyboardMarkup([])
     if clear_markup:
         extra["reply_markup"] = InlineKeyboardMarkup([])
@@ -172,11 +166,9 @@ async def safe_edit_message(
     if chat_id is None or message_id is None:
         return False
     markup = kwargs.get("reply_markup")
-    payload, fallback = _message_with_buttons(html_message(text), markup)
+    payload = _message_with_buttons(html_message(text), markup)
     extra: dict[str, Any] = {}
-    if fallback is not None:
-        extra["reply_markup"] = fallback
-    elif "reply_markup" in kwargs and not _markup_has_buttons(markup):
+    if "reply_markup" in kwargs and not _markup_has_buttons(markup):
         extra["reply_markup"] = InlineKeyboardMarkup([])
     if clear_markup:
         extra["reply_markup"] = InlineKeyboardMarkup([])

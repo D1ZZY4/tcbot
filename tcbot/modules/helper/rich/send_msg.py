@@ -37,10 +37,7 @@ async def send_rich(
 ) -> Message:
     """Send a rich message through Kurigram's native MTProto transport."""
     _ = parse_mode
-    payload, fallback = _message_with_buttons(message, reply_markup)
-    extra: dict[str, Any] = {}
-    if fallback is not None:
-        extra["reply_markup"] = fallback
+    payload = _message_with_buttons(message, reply_markup)
     sent = await bot.send_rich_message(
         chat_id,
         _input_rich(payload),
@@ -51,7 +48,6 @@ async def send_rich(
             if reply_to_message_id is not None
             else None
         ),
-        **extra,
     )
     if sent is None:
         raise RuntimeError("Telegram returned no message for the rich send")

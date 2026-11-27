@@ -20,6 +20,9 @@ from pyrogram.types import InputRichMessage
 
 from tcbot.modules.helper.rich.button import buttons_from_markup
 from tcbot.modules.helper.rich.formats import divider
+from tcbot.utils.logger import get_logger
+
+log = get_logger(__name__)
 
 _CODE = r"<code>[^<]+</code>"
 _COMMAND_LINE = re.compile(rf"^({_CODE})(.*)$")
@@ -92,21 +95,24 @@ def _markup_has_buttons(reply_markup: Any | None) -> bool:
 
 def _message_with_buttons(
     message: dict[str, Any], reply_markup: Any | None
-) -> tuple[dict[str, Any], Any | None]:
-    """Append rich button rows when possible, else keep the native markup.
+) -> dict[str, Any]:
+    """Append rich button rows; never fall back to a native keyboard.
 
-    A native keyboard is forwarded only for a non-empty keyboard that could not
-    be converted, so no button is lost. An empty markup is deliberately not
-    forwarded: it is used to clear an old keyboard.
+    Every bot message travels as one rich payload. A keyboard that cannot be
+    expressed as rich buttons is dropped with a loud log rather than forwarded
+    as a second representation. An empty or missing markup produces no rows;
+    clearing an existing keyboard is the caller's explicit decision.
     """
     rows = buttons_from_markup(reply_markup)
     html_value = message.get("html")
     if not rows or not isinstance(html_value, str):
-        return message, reply_markup if _markup_has_buttons(reply_markup) else None
+        if rows is None and _markup_has_buttons(reply_markup):
+            log.error("Rich keyboard conversion failed; sending without buttons")
+        return message
     payload = dict(message)
     separator = [] if html_value.rstrip().endswith("<hr/>") else [divider()]
     payload["html"] = "\n".join([html_value, *separator, *rows])
-    return payload, None
+    return payload
 
 
 def _input_rich(message: dict[str, Any]) -> InputRichMessage:

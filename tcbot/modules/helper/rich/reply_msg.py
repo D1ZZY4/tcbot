@@ -30,14 +30,10 @@ async def reply_rich_result(
     disable_notification: bool | None = None,
 ) -> Message:
     """Rich reply that returns the sent message so flows can record its id."""
-    payload, fallback = _message_with_buttons(html_message(text), reply_markup)
-    extra: dict[str, Any] = {}
-    if fallback is not None:
-        extra["reply_markup"] = fallback
+    payload = _message_with_buttons(html_message(text), reply_markup)
     sent = await msg.reply_rich(
         _input_rich(payload),
         disable_notification=disable_notification,
-        **extra,
     )
     if sent is None:
         raise RuntimeError("Telegram returned no message for the rich reply")
@@ -55,15 +51,11 @@ async def reply_rich(
     """Send a rich reply, logging a transport failure instead of raising."""
     _ = parse_mode
     markup = kwargs.get("reply_markup")
-    payload, fallback = _message_with_buttons(html_message(text), markup)
-    extra: dict[str, Any] = {}
-    if fallback is not None:
-        extra["reply_markup"] = fallback
+    payload = _message_with_buttons(html_message(text), markup)
     try:
         await msg.reply_rich(
             _input_rich(payload),
             disable_notification=kwargs.get("disable_notification"),
-            **extra,
         )
     except Exception as exc:
         if is_edit_target_gone_error(exc):

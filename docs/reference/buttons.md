@@ -55,17 +55,18 @@ with the same alignment and drops empty rows.
 
 Older clients ignore the style field, so color is purely additive.
 
-### Inline keyboard fallback
+### Rich-only keyboard conversion
 
 `buttons_from_markup(reply_markup)` is all-or-nothing for real cells: one cell
-that cannot map keeps the whole keyboard inline. Empty navigation rows from
-single-page keyboards are dropped losslessly, so they do not trigger the
-fallback. Every cell action above has a rich equivalent, so a cell fails to map
+that cannot map drops the whole keyboard and logs an ERROR. Empty navigation
+rows from single-page keyboards are dropped losslessly, so they do not trigger
+the error. Every cell action above has a rich equivalent, so a cell fails to map
 only when its `callback_data` exceeds 64 bytes, its text is not a string, or it
 carries an action outside the mapped set. A cell with no action is rendered as a
 disabled rich button. Payloads using `blocks` instead of `html` are not
-embedded. This is a markup fallback on the same rich message, never a
-non-rich transport; there is no parse-mode send path.
+embedded. No native keyboard is ever sent alongside a rich message; clearing an
+old keyboard uses an explicit empty native markup because Telegram has no rich
+clear. There is no parse-mode send path.
 
 `table_cell(button("Go", data="go"), raw=True)` places an inline rich button
 inside a table cell. A raw cell is the explicit opt-in that keeps trusted button
