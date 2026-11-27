@@ -263,6 +263,34 @@ def test_a_revocation_marker_outlives_the_l2_value(
     assert expiries and expiries[0] >= 90
 
 
+def test_a_display_hint_invalidation_does_not_block_later_l2_fills(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A display-hint delete needs no tombstone that suppresses later writes."""
+    written_keys: list[str] = []
+
+    class _RecordingRedis(_StaleRedis):
+        async def set(self, *args: Any, **kwargs: Any) -> bool:
+            written_keys.append(str(args[0]))
+            return await super().set(*args, **kwargs)
+
+    async def _run() -> None:
+        cache: TwoLevelCache[str] = TwoLevelCache(
+            memory_ttl=60, redis_ttl=90, redis_prefix="umention"
+        )
+        outage["active"] = False
+        cache.invalidate(7)
+        await _settle(tasks, outage)
+        cache.put(7, "fresh")
+        await _settle(tasks, outage)
+
+    redis = _RecordingRedis()
+    tasks, outage = _queue(monkeypatch, redis)
+    asyncio.run(_run())
+    assert not any("tombstone:" in key for key in written_keys)
+    assert any(key.endswith(":umention:v2:7") for key in written_keys)
+
+
 def test_a_configured_redis_outage_without_a_client_is_reported(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

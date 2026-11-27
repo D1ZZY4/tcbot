@@ -138,6 +138,24 @@ def test_peek_does_not_promote_stale_l2_after_a_local_write(
     assert cache.get(7) is CACHE_MISS
 
 
+def test_a_batch_read_ignores_a_pending_local_invalidation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A revoked key must not be returned by the batch reader either."""
+    redis = _FakeRedis()
+    monkeypatch.setattr(redis_io, "usable_redis_client", lambda: redis)
+    cache = _cache()
+    redis.store[f"tcbot:{cfg.db_schema}:test-batch-peek:v2:7"] = _encode(
+        ["Old", "old", None]
+    )
+    cache._pending_invalidations.add(7)
+
+    found = asyncio.run(cache.peek_many([7]))
+
+    assert found == {}
+    assert cache.get(7) is CACHE_MISS
+
+
 def test_a_queued_write_is_skipped_when_a_tombstone_exists(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

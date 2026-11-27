@@ -625,8 +625,17 @@ async def refresh_display_name(user_id: int, first_name: str) -> bool:
     # * re-warming after it would restore a cleared identity to L1 and Redis.
     if user_mention_cache.revision() != revision + 1:
         return True
-    if isinstance(cached, list) and len(cached) == 3 and cached[0] is not None:
-        user_mention_cache.put(user_id, [first_name, triple[1], triple[2]])
+    # * The partial write preserves the stored username and last name. Read
+    # * them from the source instead of reusing the peeked values: peek may
+    # * return an L2 entry that predates a full identity update in another
+    # * process, and caching it here would hide the stored profile for the
+    # * whole TTL. The second revision check keeps the read from publishing
+    # * a snapshot invalidated by a write that landed while it was running.
+    stored = await _fetch_mention_triple(user_id)
+    if user_mention_cache.revision() != revision + 1:
+        return True
+    if stored[0] is not None:
+        user_mention_cache.put(user_id, stored)
     return True
 
 

@@ -190,13 +190,19 @@ class TwoLevelCache[T]:
         if cfg.redis_url:
             self._pending_invalidations.add(key)
             rkey = self._rkey(key)
-            # * Tombstone and delete are one watched operation. A tombstone
-            # * that fails must not be followed by a delete: without the
-            # * cross-process marker, another process can still promote the
-            # * revoked L2 value into its memory layer.
+            # * Revocation prefixes need a cross-process marker before the
+            # * delete: a failed tombstone must not be followed by a delete,
+            # * or another process can promote the revoked L2 value. Display
+            # * hints need no such marker, and leaving one for the full record
+            # * TTL would suppress every later L2 fill for that key.
+            mutation = (
+                (lambda: self._redis_revoke(rkey, self._tombstone_key(key)))
+                if self._critical_delete
+                else (lambda: self._redis_delete(rkey))
+            )
             task = redis_io.enqueue_redis_mutation(
                 self._redis_prefix,
-                lambda: self._redis_revoke(rkey, self._tombstone_key(key)),
+                mutation,
                 droppable=not self._critical_delete,
             )
             self._watch_mutation(self._pending_invalidations, key, task)
@@ -444,10 +450,15 @@ class TwoLevelCache[T]:
                         metrics.record_miss()
                         continue
                     metrics.record_hit("l2")
+                    # * A pending local delete means this payload is revoked.
+                    # * The single-key reader falls through to the source in
+                    # * that case; a batch reader must not be less strict.
+                    if key in self._pending_invalidations:
+                        metrics.record_miss()
+                        continue
                     if (
                         states[key].generation == generations[key]
                         and self._epoch == epoch
-                        and key not in self._pending_invalidations
                         and key not in self._pending_writes
                     ):
                         self._mem.put(key, loaded)
