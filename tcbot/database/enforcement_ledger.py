@@ -349,6 +349,15 @@ _TARGET_REPORT = text(
     """
 )
 
+_JOIN_ACTION_EXISTS = text(
+    """
+    SELECT 1
+      FROM moderation_actions
+     WHERE id = :action_id
+       AND status = 'active'
+    """
+)
+
 _KICK_ACTION_EXISTS = text(
     """
     SELECT 1
@@ -485,6 +494,36 @@ async def queue_run(
             },
         )
     return int(run_id)
+
+
+async def queue_join_enforcement(
+    action_id: int,
+    chat_id: int,
+    requested_by_user_id: int | None = None,
+) -> int | None:
+    """Queue a durable apply for a decision that could not be replayed on join.
+
+    A Telegram failure at join time leaves an active ban or mute unapplied to a
+    member who is now in the chat. The run is idempotent per decision and chat,
+    so a second join while the first repair is pending does not double-enforce.
+    """
+    if action_id <= 0 or chat_id == 0:
+        return None
+
+    async def _work(sess: AsyncSession) -> int | None:
+        exists = await sess.scalar(_JOIN_ACTION_EXISTS, {"action_id": action_id})
+        if exists is None:
+            return None
+        return await queue_run(
+            sess,
+            action_id=action_id,
+            operation="apply",
+            idempotency_key=f"moderation:{action_id}:join-apply:{chat_id}:v1",
+            requested_by_user_id=requested_by_user_id,
+            chat_ids=(chat_id,),
+        )
+
+    return await run_transaction(_work)
 
 
 async def queue_kick_unban_repair(

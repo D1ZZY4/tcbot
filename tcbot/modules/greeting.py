@@ -15,6 +15,7 @@ from pyrogram.types import Chat, ChatPermissions, Message, User
 
 from tcbot import cfg
 from tcbot import database as db
+from tcbot.database.types import as_int
 from tcbot.modules.helper import buttons, decorators
 from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.context import Ctx, bot_identity, chat_id_of, display_name
@@ -59,6 +60,40 @@ _MAX_CONCURRENT_JOINS: int = 10
 # * new-member callback would otherwise get its own Semaphore(10), making
 # * the effective Telegram+database concurrency N*10 with no ceiling.
 _join_sem = asyncio.Semaphore(_MAX_CONCURRENT_JOINS)
+
+
+async def _queue_join_repair(
+    decision: BanDoc | ActiveMuteDoc, chat_id: int, user_id: int
+) -> None:
+    """Queue a durable apply when Telegram refused enforcement on join.
+
+    The member is already in the chat, so leaving the failure in the log alone
+    would keep an active ban or mute unenforced until an operator acts. A
+    database outage while queueing is logged loudly; the original Telegram
+    failure remains visible in the audit trail.
+    """
+    action_id = as_int(decision.get("id"))
+    try:
+        run_id = await db.enforcement_ledger.queue_join_enforcement(
+            action_id, chat_id, user_id
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception(
+            "Join repair queue failed for uid=%d in chat=%d", user_id, chat_id
+        )
+        return
+    if run_id is None:
+        log.warning(
+            "Join repair not queued for uid=%d: decision %d is not actionable",
+            user_id,
+            action_id,
+        )
+        return
+    log.info(
+        "Queued join repair run %d for uid=%d in chat=%d", run_id, user_id, chat_id
+    )
 
 
 async def _in_federation(chat_id: int, *, action: str) -> bool | None:
@@ -174,7 +209,7 @@ async def _ack_markup(member_id: int, locale: str) -> object | None:
     greeting-only surface, so no button appears on channel posts or /rules.
     """
     try:
-        requirement = await db.rules_db.acknowledgement_requirement()
+        requirement = await db.rules_db.acknowledgement_requirement(locale)
         if requirement is None:
             return None
         version_id = requirement[0]
@@ -411,6 +446,7 @@ async def _handle_member(
                 member.id,
                 chat_id_of(chat),
             )
+            await _queue_join_repair(ban, chat_id_of(chat), member.id)
             return
         await _send_join_ban_notices(
             bot,
@@ -453,6 +489,7 @@ async def _handle_member(
                     member.id,
                     chat_id_of(chat),
                 )
+                await _queue_join_repair(mute, chat_id_of(chat), member.id)
 
     if greet:
         markup = await _ack_markup(member.id, locale)

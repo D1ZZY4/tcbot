@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
+from tcbot.modules import greeting
 from tcbot.modules.helper.pipelines import connect_common, connect_replay
 from tcbot.modules.helper.pipelines.connect_added import BuildConnection
 from tcbot.modules.helper.pipelines.connect_replay import (
@@ -30,6 +31,23 @@ def _replay_targets_are_not_owners(monkeypatch: pytest.MonkeyPatch) -> None:
         return False
 
     monkeypatch.setattr(db.users_roles, "is_owner", _is_owner)
+
+
+def test_a_refused_join_enforcement_is_queued_for_repair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed ban or mute replay gets a durable apply for the same chat."""
+    queued: list[tuple[int, int, int]] = []
+
+    async def _queue(action_id: int, chat_id: int, user_id: int) -> int:
+        queued.append((action_id, chat_id, user_id))
+        return 42
+
+    monkeypatch.setattr(db.enforcement_ledger, "queue_join_enforcement", _queue)
+
+    asyncio.run(greeting._queue_join_repair({"id": 17}, -100, 9))  # type: ignore[arg-type]
+
+    assert queued == [(17, -100, 9)]
 
 
 class _FakeBot:
