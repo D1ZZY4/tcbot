@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 from typing import Any
 
 import pytest
@@ -41,6 +42,31 @@ def test_scheduler_stop_clears_state_on_task_exception(
         assert sched_mod._sched_ready is None
         assert sched_mod._sched_stop is None
         assert sched_mod._sched_error is None
+
+    asyncio.run(_run())
+
+
+def test_cancelled_stop_releases_the_scheduler_worker() -> None:
+    """A shutdown cancellation must not leave the dedicated thread alive."""
+
+    async def _never_done() -> None:
+        await asyncio.Event().wait()
+
+    async def _run() -> None:
+        sched_mod._sched_stop = asyncio.Event()
+        sched_mod._sched_ready = asyncio.Event()
+        sched_mod._sched_error = None
+        sched_mod._sched_task = asyncio.create_task(_never_done())
+        sched_mod._scheduler_executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="test-scheduler"
+        )
+        stopping = asyncio.create_task(sched_mod.stop())
+        await asyncio.sleep(0)
+        stopping.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await stopping
+        assert sched_mod._scheduler_executor is None
+        assert sched_mod._sched_task is None
 
     asyncio.run(_run())
 

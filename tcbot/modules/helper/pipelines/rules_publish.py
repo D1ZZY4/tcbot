@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from tcbot import cfg
@@ -32,6 +33,10 @@ async def publish_rules(
         raise RuntimeError("MAIN_CHANNEL is not configured; publishing is disabled")
     await rules_db.runs.reclaim_expired()
     run_id = await rules_db.runs.acquire(set_id, version_id, cfg.main_channel)
+    # * The run owns a slot in the partial unique index until it is closed.
+    # * Cancellation is a BaseException and used to skip the only finish()
+    # * call, blocking every later publish until the lease expired.
+    status = "failed"
     try:
         items = await rules_db.all_items(version_id)
         if not items:
@@ -99,8 +104,8 @@ async def publish_rules(
                 )
         await rules_db.publications.retire_unused(set_id, content_locale, keep_ids)
         status = "completed" if not failed else "partial"
-        await rules_db.runs.finish(run_id, status)
         return {"synced": synced, "failed": failed, "status": status}
-    except Exception as exc:
-        await rules_db.runs.finish(run_id, "failed", error=str(exc))
-        raise
+    finally:
+        # * Shield the terminal write so a second cancellation cannot strand
+        # * the run after the first one already ended the publish.
+        await asyncio.shield(rules_db.runs.finish(run_id, status))

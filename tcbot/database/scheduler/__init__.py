@@ -87,6 +87,14 @@ def _scheduler_pool() -> concurrent.futures.ThreadPoolExecutor:
     return _scheduler_executor
 
 
+def _release_scheduler_executor() -> None:
+    """Release the dedicated worker exactly once on any lifecycle exit."""
+    global _scheduler_executor
+    executor, _scheduler_executor = _scheduler_executor, None
+    if executor is not None:
+        executor.shutdown(wait=False)
+
+
 # ──────────────────────────── Schedules ──────────────────────────── #
 
 # ──────────────── Recurring job schedule IDs ──────────────────── #
@@ -219,6 +227,7 @@ async def _scheduler_background(
     # * on a worker thread instead of stalling the event loop.
     loop = asyncio.get_running_loop()
     scheduler: AsyncIOScheduler | None = None
+    store: SQLAlchemyJobStore | None = None
     started = False
     try:
         store = await loop.run_in_executor(
@@ -229,6 +238,8 @@ async def _scheduler_background(
         # * The loop is bound explicitly so the scheduler can be started from
         # * a worker thread: APScheduler would otherwise call
         # * get_running_loop() there and fail.
+        if store is None:
+            raise RuntimeError("The scheduler job store was not built.")
         scheduler = AsyncIOScheduler(
             event_loop=asyncio.get_running_loop(),
             jobstores={_JOBSTORE_ALIAS: store},
@@ -286,6 +297,12 @@ async def _scheduler_background(
         if started and scheduler is not None:
             with contextlib.suppress(Exception):
                 scheduler.shutdown(wait=False)
+        if store is not None:
+            # * APScheduler defers its own job-store shutdown to a loop
+            # * callback. Dispose the engine here so a fast loop teardown
+            # * cannot leave the store's pool alive.
+            with contextlib.suppress(Exception):
+                store.shutdown()
         _scheduler = None
         log.info("APScheduler background task exited.")
 
@@ -644,6 +661,7 @@ async def start(
         _sched_ready = None
         _sched_stop = None
         _sched_error = None
+        _release_scheduler_executor()
         raise
     except TimeoutError:
         # * The background task did not signal readiness within the grace
@@ -677,6 +695,7 @@ async def start(
         _sched_ready = None
         _sched_stop = None
         _sched_error = None
+        _release_scheduler_executor()
         raise RuntimeError("APScheduler failed to start.") from startup_error
     log.info("APScheduler ready (SQLAlchemyJobStore).")
 
@@ -704,6 +723,7 @@ async def stop() -> None:
             _sched_ready = None
             _sched_stop = None
             _sched_error = None
+            _release_scheduler_executor()
             raise
         except TimeoutError:
             log.warning(
@@ -733,9 +753,7 @@ async def stop() -> None:
     _sched_error = None
     # * The dedicated worker owns a thread and the blocking job-store engine.
     # * Leaving it alive across a stop/start cycle leaks both into the next run.
-    executor, _scheduler_executor = _scheduler_executor, None
-    if executor is not None:
-        executor.shutdown(wait=False)
+    _release_scheduler_executor()
     log.info("APScheduler stopped.")
 
 

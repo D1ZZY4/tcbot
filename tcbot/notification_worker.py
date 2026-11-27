@@ -90,10 +90,16 @@ async def run_once(bot: Client) -> None:
         tasks = await db.notifications_db.claim_due_tasks(
             limit, retry_after=_RETRY_DELAY
         )
+        unprocessed = list(tasks)
         for task in tasks:
+            unprocessed.pop(0)
             try:
                 await _process_task(bot, task, probe_reserved=probe_reserved)
             except asyncio.CancelledError:
+                # * _process_task returns its own in-flight claim. The rest were
+                # * charged by the batch claim but never reached Telegram, so
+                # * their attempts must be handed back as well.
+                await _release_unprocessed(unprocessed)
                 raise
             except Exception as exc:
                 log.exception(
@@ -126,6 +132,32 @@ async def run_once(bot: Client) -> None:
         # * the reserved probe for every other circuit participant.
         if probe_reserved:
             _cb.telegram.release_probe()
+
+
+async def _release_unprocessed(tasks: list[dict[str, object]]) -> None:
+    """Return claims that a shutdown reached before their Telegram edit."""
+    cancellation: asyncio.CancelledError | None = None
+    for task in tasks:
+        task_id = as_int(task.get("id"))
+        if task_id <= 0:
+            continue
+        try:
+            # * A second cancellation during shutdown must not abort the
+            # * remaining releases or undo the database write already in flight.
+            await asyncio.shield(
+                db.notifications_db.release_claim(
+                    task_id,
+                    expected_attempts=as_int(task.get("attempts")),
+                    expected_message_id=as_int(task.get("message_id")),
+                    expected_next_retry_at=task.get("next_retry_at"),
+                )
+            )
+        except asyncio.CancelledError as exc:
+            cancellation = exc
+        except Exception:
+            log.exception("Review-card claim release failed for task=%s", task_id)
+    if cancellation is not None:
+        raise cancellation
 
 
 def _card_is_still_decidable(action: dict[str, object], message_id: int) -> bool:

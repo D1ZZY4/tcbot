@@ -530,3 +530,71 @@ def test_an_invalid_task_is_settled_instead_of_retried(
     asyncio.run(notification_worker.run_once(_Bot()))  # type: ignore[arg-type]
 
     assert completed[0]["state"] == "failed"
+
+
+def test_cancelling_a_batch_returns_unprocessed_claims(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A shutdown mid-batch must not spend retries on cards never edited."""
+    released: list[dict[str, Any]] = []
+    completed: list[dict[str, Any]] = []
+    first = _task()
+    second = {
+        **_task(),
+        "id": 2,
+        "attempts": 3,
+        "message_id": 901,
+        "next_retry_at": "second-deadline",
+    }
+    started = asyncio.Event()
+
+    async def _claim(limit: int = 10, *, retry_after: Any) -> list[dict[str, object]]:
+        return [first, second]
+
+    async def _load(task_id: int) -> dict[str, object]:
+        return {
+            "external_ref": "ref",
+            "target_user_id": 42,
+            "status": "revoked",
+            "has_pending_appeal": False,
+            "review_message_id": None,
+        }
+
+    async def _locale(chat_id: int) -> str:
+        return "en-US"
+
+    async def _complete(task_id: int, **kwargs: Any) -> None:
+        completed.append({"task_id": task_id, **kwargs})
+        if task_id == 1:
+            started.set()
+            await asyncio.Event().wait()
+
+    async def _release(task_id: int, **kwargs: Any) -> None:
+        released.append({"task_id": task_id, **kwargs})
+
+    monkeypatch.setattr(db.notifications_db, "claim_due_tasks", _claim)
+    monkeypatch.setattr(db.notifications_db, "load_task_action", _load)
+    monkeypatch.setattr(notification_worker, "_group_locale", _locale)
+    monkeypatch.setattr(db.notifications_db, "complete_task", _complete)
+    monkeypatch.setattr(db.notifications_db, "release_claim", _release)
+
+    async def _scenario() -> None:
+        running = asyncio.create_task(
+            notification_worker.run_once(_Bot())  # type: ignore[arg-type]
+        )
+        await asyncio.wait_for(started.wait(), timeout=1)
+        running.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await running
+
+    asyncio.run(_scenario())
+
+    assert [entry["task_id"] for entry in completed] == [1]
+    assert released == [
+        {
+            "task_id": 2,
+            "expected_attempts": 3,
+            "expected_message_id": 901,
+            "expected_next_retry_at": "second-deadline",
+        }
+    ]
