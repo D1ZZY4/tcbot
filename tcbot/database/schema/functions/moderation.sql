@@ -126,6 +126,11 @@ BEGIN
         SELECT v_run_id, cc.chat_id
         FROM %SCHEMA%.connected_chats AS cc
         WHERE cc.is_active
+           OR cc.chat_id = coalesce(
+                nullif(current_setting('tcbot.primary_chat_id', true), '')::bigint,
+                (SELECT cs.primary_chat_id FROM %SCHEMA%.community_settings AS cs
+                  WHERE cs.singleton_key = 'global')
+           )
         ON CONFLICT (run_id, chat_id) DO NOTHING;
     END IF;
 

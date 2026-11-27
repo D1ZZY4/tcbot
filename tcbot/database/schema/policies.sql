@@ -73,6 +73,10 @@ BEGIN
         'mtproto_state',
         'apscheduler_jobs'
     ] LOOP
+        -- * An early schema reapply runs these current files against an older
+        -- * table set. Skip tables introduced by a later revision instead of
+        -- * aborting the whole script on a missing relation.
+        CONTINUE WHEN to_regclass(format('%I.%I', v_schema, table_name)) IS NULL;
         EXECUTE format(
             'ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY',
             v_schema, table_name
@@ -111,6 +115,8 @@ BEGIN
         'role_permission_matrix',
         'warn_counts'
     ] LOOP
+        -- * A view introduced by a later revision is not there to revoke.
+        CONTINUE WHEN to_regclass(format('%I.%I', v_schema, view_name)) IS NULL;
         EXECUTE format(
             'REVOKE ALL ON %I.%I FROM anon, authenticated',
             v_schema, view_name

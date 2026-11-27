@@ -15,6 +15,7 @@ from alembic.script import ScriptDirectory
 
 from scripts import generate_initial_migration as generator
 from tcbot.database import migrations
+from tcbot.database.schema import _created_statements, read_schema_file
 
 # * The percent-encoded password is ordinary in a PostgreSQL URL: the
 # * password is sent URL-encoded, so a "@" or a "/" in it shows up as
@@ -160,6 +161,26 @@ def test_the_schema_identifier_guard_accepts_scratch_names() -> None:
     assert migrations.is_safe_schema("development") is True
     assert migrations.is_safe_schema('bad"; DROP SCHEMA public') is False
     assert migrations.is_safe_schema("1migration") is False
+
+
+def test_a_create_trigger_skips_a_table_from_a_later_revision() -> None:
+    """An early reapply must not abort on a table it has not created yet."""
+    present = (
+        "CREATE TRIGGER trg_present BEFORE INSERT ON public.telegram_users "
+        "FOR EACH ROW EXECUTE FUNCTION public.f()"
+    )
+    future = (
+        "CREATE TRIGGER trg_future BEFORE INSERT ON public.rule_publications "
+        "FOR EACH ROW EXECUTE FUNCTION public.f()"
+    )
+
+    assert _created_statements([present, future], {"telegram_users"}) == [present]
+
+
+def test_the_policy_script_skips_relations_it_cannot_see() -> None:
+    """A missing table or view must not abort the current policy files."""
+    source = read_schema_file("policies.sql")
+    assert source.count("CONTINUE WHEN to_regclass(") == 2
 
 
 def test_the_bootstrap_generator_refuses_to_overwrite_the_first_revision(

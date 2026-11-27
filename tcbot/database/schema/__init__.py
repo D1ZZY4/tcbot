@@ -92,7 +92,9 @@ def apply_schema(connection: Connection) -> None:
     for name in SCHEMA_FILES:
         statements = file_statements(name, schema)
         if name == "triggers.sql":
-            statements = _drop_statements(name, schema, existing) + statements
+            statements = _drop_statements(name, schema, existing) + _created_statements(
+                statements, existing
+            )
         execute_statements(connection, statements)
 
 
@@ -117,6 +119,26 @@ def seed_statements(schema: str) -> list[str]:
     after it removed the rows it owns.
     """
     return file_statements("seed.sql", schema)
+
+
+def _created_statements(statements: list[str], existing: set[str]) -> list[str]:
+    """Skip CREATE TRIGGER statements whose target table does not exist yet.
+
+    The SQL files are current while an early Alembic revision may run them
+    against an older table set. Drops are already filtered by ``existing``;
+    creates must use the same rule or a forward-referenced table such as
+    ``rule_publications`` aborts the whole reapply script before the
+    deployment reaches the revision that introduces it.
+    """
+    kept: list[str] = []
+    for statement in statements:
+        match = _TRIGGER_PATTERN.search(statement)
+        if match is not None:
+            table = match.group(2).rsplit(".", 1)[-1].replace('"', "")
+            if table not in existing:
+                continue
+        kept.append(statement)
+    return kept
 
 
 def _existing_tables(connection: Connection, schema: str) -> set[str]:

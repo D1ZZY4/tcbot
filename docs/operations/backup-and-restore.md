@@ -46,17 +46,24 @@ For the deployment schema, a schema-scoped custom-format dump is the usual
 choice:
 
 ```bash
-pg_dump "$DATABASE_URL" \
+# * Keep the password out of the process argument vector: any local user can
+# * read argv of a running command. Supply it through the environment instead.
+PGPASSWORD="$DB_PASSWORD" pg_dump "$SAFE_DATABASE_URL" \
   --schema=public \
   --format=custom \
   --file=tcbot-public.backup
 ```
 
-For a non-public schema, replace `public` with the configured `DB_SCHEMA` value
-(such as `development`). A plain SQL dump is also valid:
+`SAFE_DATABASE_URL` is the configured URL with the password removed; build it
+from the host, port, database, and user without the `user:password@` authority.
+`DB_PASSWORD` comes from the platform secret manager or a protected shell
+environment, never from a repository file. For a non-public schema, replace
+`public` with the configured `DB_SCHEMA` value (such as `development`). A plain
+SQL dump uses the same credential-free URL:
 
 ```bash
-pg_dump "$DATABASE_URL" --schema=public --file=tcbot-public.sql
+PGPASSWORD="$DB_PASSWORD" pg_dump "$SAFE_DATABASE_URL" \
+  --schema=public --file=tcbot-public.sql
 ```
 
 If the deployment uses pg_cron, capture its job definitions separately from
@@ -69,16 +76,20 @@ Restore into an empty or freshly reset target schema. Verify the target schema
 name before running destructive steps.
 
 ```bash
-pg_restore --dbname="$TARGET_DATABASE_URL" \
+PGPASSWORD="$TARGET_DB_PASSWORD" pg_restore --dbname="$SAFE_TARGET_DATABASE_URL" \
   --schema=public \
   --clean --if-exists \
   tcbot-public.backup
 ```
 
+Use the same credential-free URL rule for the target connection. Alternatively,
+use a `.pgpass` file or a libpq service file so no password appears in a command
+line at all.
+
 For a plain SQL dump, apply it with `psql` against the target database. After
 the restore, query the `alembic_version` table and compare its value with the
 newest revision in `alembic/versions/` (currently
-`0021_moderation_expiry_clock`). The bot applies any pending revisions at
+`0022_forward_guarded_schema`). The bot applies any pending revisions at
 startup, so a restored database behind the code head is upgraded automatically.
 
 ## Post-restore checks
@@ -107,6 +118,10 @@ startup, so a restored database behind the code head is upgraded automatically.
 ## Security
 
 - Encrypt backup files at rest and in transit.
+- Never pass a DSN containing a password to `pg_dump`, `pg_restore`, or `psql`:
+  command-line arguments are visible in process listings. Strip credentials
+  from the URL and supply the secret through `PGPASSWORD`, `.pgpass`, or a
+  libpq service file.
 - Do not include secrets, tokens, or private chat ids in log excerpts or
   documentation.
 - Restrict access to dumps to the operators who need them.
