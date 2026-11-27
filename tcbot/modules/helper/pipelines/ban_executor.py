@@ -387,6 +387,30 @@ async def execute_ban(bot: Client, msgs: list[Message], meta: dict[str, Any]) ->
                     catch_all=True,
                 )
             return
+        # * The demote gate performs a role read, a role write, a log send and a
+        # * DM send. None of those awaits was covered by the gate above, so a
+        # * moderator demoted in that window could still file a federation ban.
+        late_refusal = await guards.enforcement_refusal(
+            admin_id,
+            target_id,
+            min_role="developer",
+            action="Ban",
+            locale=locale,
+        )
+        if late_refusal is not None:
+            if prompt_msg_id and prompt_chat_id:
+                await safe_edit_message(
+                    bot,
+                    prompt_chat_id,
+                    prompt_msg_id,
+                    late_refusal,
+                    parse_mode=None,
+                    reply_markup=None,
+                    log_level="debug",
+                    log_label="Ban rank-refusal after demote",
+                    catch_all=True,
+                )
+            return
         log_msg_id, db_ok, ban_id, enforcement_run_id = await _execute_ban_record(
             bot,
             meta,

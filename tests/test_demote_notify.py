@@ -38,7 +38,8 @@ class _FakeBot:
 def _demote_no_db(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Stub the role removal so no database is touched."""
 
-    async def _removed(target_id: int) -> bool:
+    async def _removed(target_id: int, **kwargs: Any) -> bool:
+        _ = kwargs
         return True
 
     monkeypatch.setattr(Demote, "remove_role", _removed)

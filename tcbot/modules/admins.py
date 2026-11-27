@@ -605,33 +605,49 @@ async def on_demote_confirm(ctx: Ctx) -> None:
         )
         return
 
-    # * The rank was read before the target lookup and identity refresh. A
-    # * demotion landing in that window must not still strip the target's role
-    # * with a stale verdict, so the authorization runs again at the mutation
-    # * point. A lookup failure fails closed like every other role read.
-    try:
-        live_executor_role = await db.users_roles.get_effective_role(
-            admin.id, fresh=True
-        )
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        log.exception(
-            "executor role re-read failed during demote callback for admin=%d",
+    # * Both ranks are read at the mutation point. A confirmation card can
+    # * stay open while the target is promoted to Admin, and the earlier read
+    # * would then still show a moderator: an Admin executor could strip a
+    # * peer Admin, a removal reserved for the Owner. Either lookup failure
+    # * fails closed like every other role read.
+    role_results = await asyncio.gather(
+        db.users_roles.get_effective_role(admin.id, fresh=True),
+        db.users_roles.get_effective_role(target_id, fresh=True),
+        return_exceptions=True,
+    )
+    throw_if_cancelled(role_results)
+    executor_result, target_result = role_results
+    if isinstance(executor_result, BaseException) or isinstance(
+        target_result, BaseException
+    ):
+        log.error(
+            "role re-read failed during demote callback for admin=%d target=%d: %s / %s",
             admin.id,
+            target_id,
+            executor_result,
+            target_result,
         )
         await cb_error_edit(
             q,
             t("admins.error.role_lookup_failed", locale, plain=True),
-            log_label="on_demote_confirm executor-role-lookup-failed",
+            log_label="on_demote_confirm role-reread-failed",
             parse_mode=None,
         )
         return
-    if not can_demote_staff(live_executor_role, target_role):
+    live_executor_role, live_target_role = executor_result, target_result
+    if live_target_role is None:
+        await cb_error_edit(
+            q,
+            t("admins.error.no_longer_removable", locale, plain=True),
+            log_label="on_demote_confirm role-gone",
+            parse_mode=None,
+        )
+        return
+    if not can_demote_staff(live_executor_role, live_target_role):
         await cb_error_edit(
             q,
             t("admins.error.owner_demote_only", locale, plain=True),
-            log_label="on_demote_confirm executor-demoted",
+            log_label="on_demote_confirm rank-changed",
             parse_mode=None,
         )
         return
@@ -641,7 +657,7 @@ async def on_demote_confirm(ctx: Ctx) -> None:
             ctx.bot,
             target_id,
             target_fname,
-            target_role,
+            live_target_role,
             admin.id,
             display_name(admin),
             trigger=None,

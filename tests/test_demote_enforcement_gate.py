@@ -114,7 +114,8 @@ def test_enforcement_dm_uses_the_localized_verb(
     """The demote DM must contain a real verb, not a missing-key marker."""
     sent: list[str] = []
 
-    async def _removed(target_id: int) -> bool:
+    async def _removed(target_id: int, **kwargs: Any) -> bool:
+        _ = kwargs
         return True
 
     async def _send_text(bot: Any, target_id: int, text: str, **kwargs: Any) -> None:

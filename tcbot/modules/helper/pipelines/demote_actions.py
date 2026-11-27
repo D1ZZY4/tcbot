@@ -62,14 +62,15 @@ class Demote:
     """
 
     @staticmethod
-    async def remove_role(target_id: int) -> bool:
-        """Revoke every active role assignment of the target.
+    async def remove_role(target_id: int, *, expected_role: str | None = None) -> bool:
+        """Revoke the active role assignment of the target.
 
-        A user holds one active role and the community keeps the
-        assignments in one table, so one statement clears them all.
+        ``expected_role`` binds the write to the role that was authorized, so
+        a promotion landing between the rank check and this write cannot be
+        undone by an executor who was only allowed to remove a lower tier.
         True when an assignment was revoked.
         """
-        return await db.users_roles.remove_role(target_id)
+        return await db.users_roles.remove_role(target_id, expected_role=expected_role)
 
     @classmethod
     async def execute(
@@ -95,7 +96,7 @@ class Demote:
         it runs, so a failure must never block the action. The unban path
         enforces the fail-closed rule itself in :func:`demote_before_unban`.
         """
-        removed = await cls.remove_role(target_id)
+        removed = await cls.remove_role(target_id, expected_role=target_role)
         if not removed:
             # * No row in the expected collection: normally already-gone
             # * (safe to proceed), but loud so a stale-cache wrong-collection

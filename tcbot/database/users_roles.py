@@ -566,14 +566,19 @@ async def change_role(user_id: int, role: str, assigned_by: int) -> None:
     effective_role_cache.invalidate(user_id)
 
 
-async def remove_role(user_id: int) -> bool:
+async def remove_role(user_id: int, *, expected_role: str | None = None) -> bool:
     """Revoke a user's community role; the assignment history stays readable.
 
     The owner assignment is never revoked here: ownership changes through
     ``set_owner``, which swaps the owner and its role in one transaction.
     A demote therefore cannot leave the federation without a Owner.
+
+    ``expected_role`` makes the revoke conditional on the role that was
+    authorized. A target promoted between the authorization read and this
+    write keeps the new role instead of having an Admin assignment stripped
+    by a decision that only permitted a Moderator demotion.
     """
-    revoked = await _revoke_role(user_id, None)
+    revoked = await _revoke_role(user_id, expected_role)
     effective_role_cache.invalidate(user_id)
     return revoked
 

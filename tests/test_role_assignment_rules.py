@@ -53,8 +53,8 @@ def _install_promote(
         _ = assigned_by
         seen["roles"].append((user_id, role))
 
-    async def _remove_role(user_id: int) -> bool:
-        _ = user_id
+    async def _remove_role(user_id: int, **kwargs: Any) -> bool:
+        _ = (user_id, kwargs)
         return True
 
     async def _upsert(*args: Any, **kwargs: Any) -> None:
@@ -236,7 +236,8 @@ def _install_transfer(
         _ = (user_id, fresh)
         return owner_still_current
 
-    async def _remove_role(user_id: int) -> bool:
+    async def _remove_role(user_id: int, **kwargs: Any) -> bool:
+        _ = kwargs
         seen["roles"].append(user_id)
         return True
 

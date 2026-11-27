@@ -112,6 +112,21 @@ async def test_a_demotion_clears_the_role(roles_db: str) -> None:
     assert await users_roles.get_effective_role(42, fresh=True) is None
 
 
+async def test_a_role_gained_after_authorization_is_not_revoked(
+    roles_db: str,
+) -> None:
+    """A demote authorized for a lower tier must not strip a newer Admin role."""
+    await users_roles.set_role(42, "moderator", 1)
+    expected = "moderator"
+    # * The target is promoted between the rank read and the write.
+    await users_roles.change_role(42, "admin", 1)
+
+    revoked = await users_roles.remove_role(42, expected_role=expected)
+
+    assert revoked is False
+    assert await users_roles.get_effective_role(42, fresh=True) == "admin"
+
+
 async def test_a_user_holds_at_most_one_active_role(roles_db: str) -> None:
     """The database refuses a second active role for one user."""
     await users_roles.add_admin(42, 1)

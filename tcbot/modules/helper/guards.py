@@ -18,7 +18,7 @@ from tcbot import database as db
 from tcbot.modules.helper import identity
 from tcbot.modules.helper.context import Ctx
 from tcbot.modules.helper.locale import effective_locale, locale_for_update
-from tcbot.modules.helper.messages import cb_error_edit, replies, reply_rich
+from tcbot.modules.helper.messages import answer_ack, cb_error_edit, replies, reply_rich
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
@@ -548,6 +548,10 @@ async def check_callback_executor(
     too instead of relying on the placeholder holding no role.
     """
     if identity.is_anon_admin(admin):
+        # * These two branches bypass check_callback_staff, which answers the
+        # * query in parallel. Without an explicit answer the client spinner
+        # * keeps running while the refusal card is edited.
+        await answer_ack(q)
         await cb_error_edit(
             q,
             replies.refuse_anon_admin(await locale_for_update(ctx), plain=True),
@@ -556,6 +560,7 @@ async def check_callback_executor(
         )
         return None
     if admin is None:
+        await answer_ack(q)
         await cb_error_edit(
             q,
             replies.err_perm_expired(await locale_for_update(ctx), plain=True),

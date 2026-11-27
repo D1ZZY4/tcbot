@@ -170,10 +170,12 @@ async def deliver_queued_run(bot: Client, run_id: int) -> bool:
             run_id,
         )
         return False
+    claimed_id: int | None = None
     try:
         run = await db.enforcement_ledger.claim_run(run_id)
         if run is None:
             return False
+        claimed_id = int(str(run.get("id", 0)))
         await _process_run(
             bot,
             run,
@@ -184,6 +186,16 @@ async def deliver_queued_run(bot: Client, run_id: int) -> bool:
     finally:
         if probe_reserved:
             _cb.telegram.release_probe()
+        if claimed_id is not None:
+            # * The delivery loop can stop on an OPEN circuit without claiming
+            # * a target. Without this, the run stays `running` and waits for
+            # * the 30-minute stale sweep instead of the next tick.
+            try:
+                await db.enforcement_ledger.defer_runs([claimed_id])
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("Could not return an immediate run to the queue")
 
 
 async def _process_run(
