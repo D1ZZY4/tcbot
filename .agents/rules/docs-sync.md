@@ -96,13 +96,13 @@ Recent project additions to keep accurate when editing docs:
   and `@username` only, never fuzzy-match.
 - Username field on `Identity` and `member_cache` indexes on `username` and
   `first_name`.
-- CI/CD workflows: `.github/workflows/auto-fix.yml` (auto-PR for Ruff fixes
-  on the fixed `auto-fix/ruff` branch),
-  `.github/workflows/dependency-update.yml` (weekly auto-PR like dependabot),
-  `.github/workflows/run-bot.yml` (self-chaining 24/7 runner with
-  Kurigram long-polling transport), `.github/workflows/codeql.yml` (security
-  scanning). All workflows are documented in
-  [`docs/operations/ci-cd.md`](../../docs/operations/ci-cd.md).
+- CI/CD workflows: `.github/workflows/lint-ruff.yml` and
+  `.github/workflows/lint-pyright.yml` (format, lint, type checks),
+  `.github/workflows/test-pytest.yml` (tests),
+  `.github/workflows/dependency-update.yml` (weekly auto-PR),
+  `.github/workflows/codeql.yml` (security scanning), and
+  `.github/workflows/run-bot.yml` (self-chaining 24/7 runner). All workflows are
+  documented in [`docs/operations/ci-cd.md`](../../docs/operations/ci-cd.md).
 - i18n system: user-facing strings in `i18n/<locale>/*.toml` (`en-US`
   source of truth, `button.toml` owns every button label once),
   per-request locale resolution (`helper.locale`), per-locale help via

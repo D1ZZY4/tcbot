@@ -1,8 +1,8 @@
 # CI/CD workflows
 
 This page documents the GitHub Actions workflows in `.github/workflows/`. They
-cover linting, type checking, tests, security scanning, automated fixes,
-dependency updates, and the 24/7 bot runner.
+cover linting, type checking, tests, security scanning, dependency updates,
+and the 24/7 bot runner.
 
 Related pages: [setup](../getting-started/setup.md) and
 [runtime mechanics](../architecture/runtime.md).
@@ -15,7 +15,6 @@ Related pages: [setup](../getting-started/setup.md) and
 | Lint (Pyright) | `lint-pyright.yml` | Push on main, feat/**, fix/**; PR on main | Static type check. |
 | Test (Pytest) | `test-pytest.yml` | Push on main, feat/**, fix/**; PR on main | PostgreSQL tests first, then the rest in parallel with coverage; a separate job smoke-tests the production observability extra. |
 | CodeQL | `codeql.yml` | Push and PR on main, weekly schedule | Security analysis for Python and Actions. |
-| Auto-Fix Code Quality | `auto-fix.yml` | Push, PR, dispatch, weekly schedule, and completion of the lint workflows | Applies Ruff fixes and opens or updates an auto-PR. |
 | Dependency Updates | `dependency-update.yml` | Weekly schedule and dispatch | Upgrades `uv.lock` and opens a dependency PR. |
 | TCF Bot 24/7 Runner | `run-bot.yml` | Dispatch, every 15 minutes, and runtime pushes | Runs the bot with a watchdog and self-chaining handover. |
 
@@ -42,23 +41,6 @@ The test suite sets dummy environment values in `tests/conftest.py` at
 collection time and uses the `test` schema only. A collection hook marks any
 test that requests the shared PostgreSQL fixtures so xdist cannot strand it on
 a worker that is not allowed to own that schema.
-
-## Auto-fix workflow
-
-`auto-fix.yml` runs Ruff format and `ruff check --fix`, then records the real
-exit codes of the Ruff, Pyright, and Pytest capture steps. A non-zero code from
-any of them triggers free GitHub Models inference for a short fix summary. The
-PR body and step summary show those codes and the logs, and the PR asks for
-review rather than claiming it is safe to merge. It targets the fixed branch
-`auto-fix/ruff` and serializes runs with concurrency group `auto-fix-ruff`. On
-pushes it opens or updates a PR; on PR events it posts a comment with the
-commands to apply the deterministic fixes locally.
-
-The workflow needs `contents: write`, `pull-requests: write`, and `models: read`.
-If `gh pr create` reports that GitHub Actions is not permitted to create
-pull requests, enable the repository toggle under Settings, Actions, General,
-Workflow permissions. The branch is already pushed, so the PR can be opened
-manually after flipping the toggle.
 
 ## Dependency update workflow
 
@@ -108,6 +90,7 @@ only when the PR was created.
 | `PREFIXES`, `COMMUNITY_NAME`, `LOG_LEVEL`, `ALBUM_DEBOUNCE_SECONDS` | Runner | Behavior and display. |
 | `MODULES_LOAD`, `MODULES_NO_LOAD`, `SENTRY_DSN`, `KURIGRAM_WORKERS` | Runner | Optional features. Unset `KURIGRAM_WORKERS` keeps automatic sizing. |
 | `BOT_PAT` | Runner, dependency updates | Self-chain dispatch and PR fallback. |
+| `TCBOT_TEST_DATABASE_URL` | Test job | Local PostgreSQL service URL for the `postgres`-marked tests; not a production secret. |
 
 `GITHUB_TOKEN` and `secrets.GITHUB_TOKEN` are provided automatically.
 

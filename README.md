@@ -177,12 +177,11 @@ One pitfall to avoid: committing `config.env` with real values because local tes
 Run exactly one live instance per token on exactly one target below. Every target launches the bot module with `uv run`; hosted examples pin the lockfile with `--frozen`, and the container image also enables the `observability` extra.
 
 <details>
-<summary>GitHub Actions automation (lint, auto-fix, dependencies, CodeQL)</summary>
+<summary>GitHub Actions automation (lint, tests, dependencies, CodeQL)</summary>
 
-Seven CI workflows run automatically. The lint, type-check, test, auto-fix, dependency-update, and CodeQL workflows need no repository secrets (validation steps use dummy values, so fork PRs work too). The 24/7 Run Bot workflow is the exception: it needs the deployment secrets listed in the next section. The Python workflows set up Python 3.14 with cached `uv`; CodeQL uses `build-mode: none` and needs no Python or `uv` setup.
+Six CI workflows run automatically. The lint, type-check, test, dependency-update, and CodeQL workflows need no repository secrets (validation steps use dummy values, so fork PRs work too). The 24/7 Run Bot workflow is the exception: it needs the deployment secrets listed in the next section. The Python workflows set up Python 3.14 with cached `uv`; CodeQL uses `build-mode: none` and needs no Python or `uv` setup.
 
 - **Lint (Ruff)** (`lint-ruff.yml`), **Lint (Pyright)** (`lint-pyright.yml`), **Test (Pytest)** (`test-pytest.yml`): on push to `main`/`feat/**`/`fix/**` and PRs to `main`. Run `ruff format --check` + `ruff check` + the `import tcbot` check, `pyright`, and two Pytest passes respectively: a serial `pytest tests/ -q -m postgres` pass, then `pytest tests/ -q -m "not postgres" -n auto --cov=tcbot --cov-branch --cov-append`. Fail the PR subject to branch protection.
-- **Auto-Fix** (`auto-fix.yml`): same push/PR triggers, completion of the Ruff and Pyright workflows, weekly Monday 04:00 UTC, and manual dispatch. Runs `ruff format` + `ruff check --fix`; outside a PR it force-pushes the fixed `auto-fix/ruff` branch and opens a PR, on a PR it comments the local fix commands instead. Needs `contents: write` + `pull-requests: write`.
 - **Dependency Updates** (`dependency-update.yml`): weekly Monday 04:00 UTC and manual dispatch. Runs `uv lock --upgrade`, validates with `ruff format --check`, `ruff check`, `pyright`, the import check, and the non-integration Pytest suite, then opens a `deps/auto-update-YYYYMMDD` PR labeled `dependencies` against `main` (no-op when the lockfile is unchanged). Sends the owner a Telegram status DM when `BOT_TOKEN`/`OWNER_ID` secrets exist, silently skips otherwise.
 - **CodeQL** (`codeql.yml`): on push/PR to `main` plus weekly Tuesday 15:38 UTC. Scans the `actions` and `python` languages with `build-mode: none`; findings land under the repository Security tab.
 - **Run Bot** (`run-bot.yml`): self-chaining 24/7 runner with Kurigram long polling, a watchdog, and a 15-minute cron resurrection fallback.
@@ -290,7 +289,7 @@ uv run python -c "import tcbot"
 git diff --check
 ```
 
-`pyproject.toml` targets Python 3.14 with line length 88. Dependencies install from `uv.lock` via `uv sync --frozen`. CI runs lint, auto-fix PRs, weekly dependency updates, CodeQL, and a long-running bot runner; see [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md). Contribution workflow and review checklist are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+`pyproject.toml` targets Python 3.14 with line length 88. Dependencies install from `uv.lock` via `uv sync --frozen`. CI runs lint, tests, weekly dependency updates, CodeQL, and a long-running bot runner; see [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md). Contribution workflow and review checklist are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Documentation
 

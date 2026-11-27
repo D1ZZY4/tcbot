@@ -53,11 +53,6 @@ Thumbs.db
 
 # Logs and scratch notes
 logs*/
-check.log
-format.log
-pyright.log
-pytest.log
-ai-fix-summary.log
 nothing.md
 nothing-*.md
 account*
