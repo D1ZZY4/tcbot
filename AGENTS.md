@@ -215,7 +215,6 @@ Current stack:
 │   │   ├── kicks_db.py       Kicks
 │   │   ├── mutes_db.py       Mutes
 │   │   ├── queues_db.py      Promotion requests
-│   │   ├── rules_db/         Community rules, publications, and acknowledgement
 │   │   ├── cache/            TwoLevelCache: codec, L1 memory, Redis boundary, singletons, twolevel
 │   │   ├── pg_cron.py        Optional pg_cron ownership of database-only jobs
 │   │   ├── redis_client.py   Optional Redis client (owns the connect/degrade decision)
@@ -248,7 +247,6 @@ Current stack:
 │   │   │   ├── messages/       Safe edits, channel delivery, and federation log renderers
 │   │   │   │   ├── audit_logs.py    Audit-log builders
 │   │   │   │   ├── panels.py        Shared information and profile panels
-│   │   │   │   ├── rules.py         Rules rendering, hashing, and selected summaries
 │   │   │   │   └── replies.py       Localized reply functions and HelpEntry shape
 │   │   │   ├── rich/           Rich HTML blocks, links, buttons, and send/edit transports
 │   │   │   │   ├── block.py        Payload assembly and block conversion
@@ -281,7 +279,6 @@ Current stack:
 │   │   ├── maintenance.py    Maintenance commands
 │   │   ├── netspeed.py       Network speed test
 │   │   ├── privacy.py        Privacy panel (callback-only, via start menu)
-│   │   ├── rules.py          /tcrules editor and /rules menu
 │   │   └── start.py          /start command
 │   └── utils/                Logging, dispatch, prefixes, datetime helpers
 │       ├── circuit_breaker.py  Telegram/PostgreSQL circuit breaker
@@ -299,8 +296,6 @@ Current stack:
 │       └── update_processor.py Per-conversation key and serialization helpers
 ├── docs/                     Developer documentation grouped by category
 ├── about/                     Bundled About source documents (federasi, keanggotaan, klarifikasi)
-├── acknowledge/               Bundled self-acknowledgement source document
-├── rules/                     Bundled rule documents seeded by scripts/seed_rules.py
 ├── alembic/                   Alembic environment and versioned schema migrations
 ├── .agents/                   Style rules
 ├── .github/                   CI workflows (lint, type-check, tests, runner)
@@ -382,7 +377,7 @@ Important non-secret/runtime variables include:
 - `PORT`: Flask keep-alive port, default `5000`; invalid or out-of-range values fall back to `5000`.
 - `BIND_HOST`: listener interface for the keep-alive and health server, default `0.0.0.0`; use `127.0.0.1` behind a local reverse proxy.
 - `MAIN_GROUP`: main community group chat id.
-- `MAIN_CHANNEL`: main community channel chat id; the rules publication target. A positive value is treated as unset.
+- `MAIN_CHANNEL`: main community channel chat id behind the menu link and a deployment-owned destination. A positive value is treated as unset.
 - `LOGS`, `LOGS_ERRORS`, `APPEALS`: log and appeal destinations; values may be `chat_id` or `chat_id/thread_id` (channel, group, or forum thread). `PROOFS` is required and belongs in the list above.
 - `INFRA_CHAT_IDS`: extra deployment-owned chat ids that the connect paths must refuse; accepts a list or CSV, and only negative chat ids are used.
 - `ALBUM_DEBOUNCE_SECONDS`: proof silence window before the ban executor runs.
