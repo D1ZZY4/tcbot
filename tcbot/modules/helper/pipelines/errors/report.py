@@ -54,6 +54,9 @@ _owner_id: int = 0
 # * the reporter hands that delivery to this loop instead of dropping it.
 _loop: asyncio.AbstractEventLoop | None = None
 _cross_thread: set[concurrent.futures.Future[None]] = set()
+# * Counted when no usable loop can ship a record; declared here because the
+# * synchronous sink reads it before the throttling block below is reached.
+_suppressed_in_window: int = 0
 
 
 def attach(
@@ -109,31 +112,44 @@ def _schedule_record(record: logging.LogRecord) -> None:
     event loop exactly when an incident floods it, and most error lines
     are duplicates that never ship.
     """
+    global _suppressed_in_window
     if _bot is None:
         # * No bot yet: the record was emitted before the reporter was
         # * attached. There is nothing to ship it to.
         return
-    if not _approved(record):
-        return
     try:
         asyncio.get_running_loop()
+        on_loop = True
     except RuntimeError:
+        on_loop = False
+    if not on_loop:
         # * A log record emitted from a worker thread has no running loop
-        # * here. Hand the delivery to the loop the reporter was attached on
-        # * instead of dropping it.
+        # * here. Hand it to the loop the reporter was attached on. If that
+        # * loop has stopped (shutdown window), count the incident for the
+        # * rollover summary instead of marking it reported via dedupe and
+        # * then dropping the delivery.
         loop = _loop
-        if loop is not None and loop.is_running():
-            # * The loop can close between is_running() and scheduling. Close
-            # * the coroutine on that failure so it is never left unawaited.
-            coro = _ship_record(record)
-            try:
-                future = asyncio.run_coroutine_threadsafe(coro, loop)
-            except RuntimeError:
-                coro.close()
-                return
-            _cross_thread.add(future)
-            future.add_done_callback(_cross_thread_done)
+        if loop is None or not loop.is_running():
+            with _send_lock:
+                _suppressed_in_window += 1
             return
+        if not _approved(record):
+            return
+        # * The loop can close between is_running() and scheduling. Close
+        # * the coroutine on that failure so it is never left unawaited.
+        coro = _ship_record(record)
+        try:
+            future = asyncio.run_coroutine_threadsafe(coro, loop)
+        except RuntimeError:
+            coro.close()
+            with _send_lock:
+                _suppressed_in_window += 1
+            return
+        _cross_thread.add(future)
+        future.add_done_callback(_cross_thread_done)
+        return
+    if not _approved(record):
+        return
     _report_tasks.spawn(_ship_record(record))
 
 
@@ -435,7 +451,7 @@ _SEND_BUDGET: int = 20
 _SEND_WINDOW: float = 60.0
 _send_window_start: float = 0.0
 _sent_in_window: int = 0
-_suppressed_in_window: int = 0
+_suppressed_in_window = 0
 # * Deliveries run as separate tasks on one loop, and the reporter also
 # * accepts cross-thread hand-off. The window counters are read and reserved
 # * under this lock so concurrent reports cannot claim the same budget slot.

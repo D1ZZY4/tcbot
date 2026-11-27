@@ -114,7 +114,8 @@ class _FakeTracker:
         return True
 
 
-def test_a_duplicate_record_never_reaches_the_sink(
+@pytest.mark.asyncio
+async def test_a_duplicate_record_never_reaches_the_sink(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The decision happens before the delivery task is created.

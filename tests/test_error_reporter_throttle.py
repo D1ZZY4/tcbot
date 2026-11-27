@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 import pytest
@@ -115,6 +116,11 @@ async def test_failed_owner_dms_do_not_burn_the_hourly_budget(
     clock = [1000.0]
     monkeypatch.setattr(error_reporter, "_bot", bot)
     monkeypatch.setattr(error_reporter, "_owner_id", 42)
+    # * An earlier test may have attached an error channel. With a channel set,
+    # * a failed owner DM falls back to it and spends an extra attempt on this
+    # * same bot double. Pin the absent channel so the budget assertion is about
+    # * owner DMs only, independent of test order.
+    monkeypatch.setattr(error_reporter, "_chat_id", 0)
     monkeypatch.setattr(error_reporter, "monotonic", lambda: clock[0])
     error_reporter._recent.clear()
     error_reporter._owner_sent.clear()
@@ -256,3 +262,21 @@ async def test_a_failed_send_does_not_refund_the_next_window(
     assert bot.calls == 2
     assert error_reporter._sent_in_window == 1
     assert error_reporter._suppressed_in_window == 1
+
+
+def test_a_record_during_loop_shutdown_is_counted_not_dropped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A worker-thread record with no usable loop must reach the rollover count."""
+    monkeypatch.setattr(error_reporter, "_bot", object())
+    monkeypatch.setattr(error_reporter, "_loop", None)
+    monkeypatch.setattr(error_reporter, "_suppressed_in_window", 0)
+    error_reporter._recent.clear()
+    record = logging.LogRecord(
+        "test", logging.ERROR, "x.py", 1, "late failure", (), None
+    )
+
+    error_reporter._schedule_record(record)
+
+    assert error_reporter._suppressed_in_window == 1
+    assert error_reporter._recent == {}
