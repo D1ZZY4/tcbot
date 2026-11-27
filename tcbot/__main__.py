@@ -343,7 +343,10 @@ async def init_shared_subsystems(client: Client) -> None:
             (
                 (cfg.proofs[0], cfg.proofs[1] is not None),
                 (cfg.logs[0], cfg.logs[1] is not None),
+                (cfg.logs_errors[0], cfg.logs_errors[1] is not None),
                 (cfg.appeals[0], cfg.appeals[1] is not None),
+                (cfg.main_channel, False),
+                *((chat_id, False) for chat_id in cfg.extra_infra_chats),
             )
         ),
         db.users_roles.ensure_initial_owner(cfg.initial_owner_id),
