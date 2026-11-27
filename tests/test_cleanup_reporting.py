@@ -14,6 +14,7 @@ import pytest
 
 from tcbot import database as db
 from tcbot.modules import maintenance
+from tcbot.modules.helper.pipelines.errors.exceptions import BadRequest
 
 
 def test_a_failed_probe_is_named_in_the_cleanup_summary(
@@ -63,3 +64,39 @@ def test_a_failed_probe_is_named_in_the_cleanup_summary(
     assert replies
     assert "failed checking" in replies[0]
     assert "<code>1</code>" in replies[0]
+
+
+@pytest.mark.asyncio
+async def test_a_gone_chat_api_refusal_prunes_the_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CHAT_NOT_FOUND means the bot is gone, not that the group is healthy."""
+
+    class _Bot:
+        async def get_chat_member(self, _chat_id: int, _user_id: int) -> None:
+            raise BadRequest("Telegram says: [400 CHAT_NOT_FOUND] - chat not found")
+
+    async def _identity(_bot: object) -> object:
+        return SimpleNamespace(id=42)
+
+    monkeypatch.setattr(maintenance, "bot_identity", _identity)
+
+    assert await maintenance._should_remove(_Bot(), {"chat_id": -101}) is True
+
+
+@pytest.mark.asyncio
+async def test_an_unrelated_api_refusal_keeps_the_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An ambiguous service refusal must not prune a live group."""
+
+    class _Bot:
+        async def get_chat_member(self, _chat_id: int, _user_id: int) -> None:
+            raise BadRequest("Telegram says: [400 SOMETHING_ELSE] - retry")
+
+    async def _identity(_bot: object) -> object:
+        return SimpleNamespace(id=42)
+
+    monkeypatch.setattr(maintenance, "bot_identity", _identity)
+
+    assert await maintenance._should_remove(_Bot(), {"chat_id": -101}) is False

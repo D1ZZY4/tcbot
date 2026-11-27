@@ -310,7 +310,27 @@ async def _should_remove(bot: Client, grp: GroupDoc) -> bool:
         status = getattr(member.status, "value", member.status)
         return status in ("left", "kicked")
     except API_REFUSAL_ERRORS as exc:
-        # * A service refusal means the bot reached Telegram; keep the group.
+        # * A bare API refusal is ambiguous, but these specific answers mean
+        # * Telegram no longer has the bot in the chat. Keeping such a row
+        # * would leave a ghost group in the active federation list forever.
+        text = str(exc).lower()
+        gone = any(
+            marker in text
+            for marker in (
+                "chat_not_found",
+                "user_not_participant",
+                "not a member",
+                "bot is not a member",
+            )
+        )
+        if gone:
+            log.warning(
+                "Telegram reports the bot left %d; pruning it in cleanup: %s",
+                chat_id,
+                exc,
+            )
+            return True
+        # * Any other service refusal means the bot reached Telegram; keep it.
         log.warning(
             "Could not verify membership for %d, keeping group: %s", chat_id, exc
         )
