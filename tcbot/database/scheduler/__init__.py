@@ -363,9 +363,7 @@ def _stored_jobs(store: SQLAlchemyJobStore) -> dict[str, Job] | None:
     try:
         return {job.id: job for job in store.get_all_jobs()}
     except Exception as exc:
-        log.warning(
-            "Stored schedule read failed (%s); every schedule is replaced.", exc
-        )
+        log.warning("Stored schedule read failed (%s).", exc)
         return None
 
 
@@ -645,6 +643,12 @@ def _reconcile_schedules(
     if notification_job is not None:
         wanted.add(_NOTIFICATION_WORKER_SCHEDULE_ID)
     fresh = _stored_jobs(store)
+    if fresh is None:
+        # * The second read failed. The first snapshot is a few seconds old
+        # * but still the best evidence of persisted stale ids; skipping the
+        # * sweep here would leave an obsolete job firing forever. Removal
+        # * tolerates ids that have already gone.
+        fresh = stored
     if fresh is not None:
         for stale_id in fresh.keys() - wanted:
             _remove_job(scheduler, stale_id, f"Stale schedule {stale_id}", stored=fresh)

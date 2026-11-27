@@ -407,6 +407,28 @@ def test_an_unknown_persisted_schedule_is_removed_on_boot(
     assert "tcbot.unknown_legacy" not in store.jobs
 
 
+def test_a_failed_fresh_read_still_sweeps_stale_ids(
+    store: _FakeJobStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The second job-store read can fail without disabling the sweep."""
+    store.jobs["tcbot.unknown_legacy"] = SimpleNamespace(
+        id="tcbot.unknown_legacy", func=sched_mod.expire_due_decisions
+    )
+    original = sched_mod._stored_jobs
+    calls = 0
+
+    def _flaky(jobstore: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        return original(jobstore) if calls == 1 else None
+
+    monkeypatch.setattr(sched_mod, "_stored_jobs", _flaky)
+
+    _run_scheduler()
+
+    assert "tcbot.unknown_legacy" not in store.jobs
+
+
 def test_schedule_removal_retries_a_transient_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
