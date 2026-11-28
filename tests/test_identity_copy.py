@@ -19,7 +19,7 @@ from tcbot.modules.helper.identity import (
     Identity,
     classify,
     is_proven_bot,
-    profile_note,
+    profile_note_for_kind,
     refuse_message,
     staff_notice,
     verify_not_bot,
@@ -65,9 +65,9 @@ def test_staff_notice_only_for_staff() -> None:
 
 def test_profile_note_only_for_special_identities() -> None:
     for kind in ("this_bot", "self", "telegram", "anon_admin"):
-        assert isinstance(profile_note(_ident(kind)), str)
+        assert isinstance(profile_note_for_kind(_ident(kind).kind), str)
     for kind in ("user", "admin", "developer", "moderator", "owner", "other_bot"):
-        assert profile_note(_ident(kind)) is None
+        assert profile_note_for_kind(_ident(kind).kind) is None
 
 
 def test_role_label_maps_staff_only() -> None:

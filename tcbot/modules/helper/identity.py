@@ -409,16 +409,6 @@ def profile_note_for_kind(kind: IdentityKind, locale: str | None = None) -> str 
     return t(f"identity.note.{kind}", locale)
 
 
-def profile_note(ident: Identity, locale: str | None = None) -> str | None:
-    """Return a recognition note for special identities, or ``None``.
-
-    ``None`` means the identity needs no note (regular users, staff, and
-    Owner: staff and Owner are already labeled by the profile Role
-    line, so a note would only restate it).
-    """
-    return profile_note_for_kind(ident.kind, locale)
-
-
 async def recognition_note(
     bot: Client, executor_id: int, target_id: int, locale: str | None = None
 ) -> str | None:
