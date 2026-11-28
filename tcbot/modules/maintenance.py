@@ -408,6 +408,7 @@ async def cmd_cleanup(ctx: Ctx) -> None:
                     "cleanup deactivate failed for chat=%s: %s",
                     grp.get("chat_id", 0),
                     result,
+                    exc_info=result,
                 )
             elif result is not True:
                 log.warning(

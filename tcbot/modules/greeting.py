@@ -156,14 +156,16 @@ async def _send_join_ban_notices(
         username=f"@{member.username}" if member.username else "-",
         ban=Safe(code(ban_id)) if ban_id else "-",
     )
+    # * The DM goes to the banned member, so it follows their locale, not
+    # * the group's. Every other ban DM resolves the recipient this way.
+    dm_locale = await locale_for_user(member.id)
+    # * Build both sends after the last await: a cancellation while resolving
+    # * the recipient's locale would otherwise abandon an unawaited coroutine.
     group_send = (
         reply_rich_result(reply_to, group_text, reply_markup=keyboard)
         if reply_to is not None
         else send_text(bot, chat_id_of(chat), group_text, reply_markup=keyboard)
     )
-    # * The DM goes to the banned member, so it follows their locale, not
-    # * the group's. Every other ban DM resolves the recipient this way.
-    dm_locale = await locale_for_user(member.id)
     dm_text = t(
         "greeting.notice.banned_dm",
         dm_locale,
@@ -390,7 +392,12 @@ async def _handle_member(
     # * later join is checked against a healthy database. Staying silent while
     # * leaving them in the group would let a banned user in during an outage.
     if isinstance(ban, BaseException):
-        log.error("get_active_ban failed on join for uid=%d: %s", member.id, ban)
+        log.error(
+            "get_active_ban failed on join for uid=%d: %s",
+            member.id,
+            ban,
+            exc_info=ban,
+        )
         await _fail_closed_join(bot, chat_id_of(chat), member.id, "new_member")
         return
     if isinstance(mute, BaseException):
@@ -398,7 +405,12 @@ async def _handle_member(
         # * removal the member keeps full posting rights until the mute is
         # * refiled or expires, and nothing repairs the missed restriction.
         # * Reuse the ban path's bounded removal and durable rejoin repair.
-        log.error("get_active_mute failed on join for uid=%d: %s", member.id, mute)
+        log.error(
+            "get_active_mute failed on join for uid=%d: %s",
+            member.id,
+            mute,
+            exc_info=mute,
+        )
         await _fail_closed_join(bot, chat_id_of(chat), member.id, "new_member_mute")
         return
 
@@ -600,6 +612,7 @@ async def on_join_request_approved(ctx: Ctx) -> None:
             user.id,
             chat_id_of(chat),
             ban,
+            exc_info=ban,
         )
         # * No later event re-checks an approved request, so silence would
         # * leave a possibly banned member in the group indefinitely.
@@ -651,6 +664,7 @@ async def on_join_request_approved(ctx: Ctx) -> None:
             user.id,
             chat_id_of(chat),
             mute,
+            exc_info=mute,
         )
         await _fail_closed_join(
             ctx.bot, chat_id_of(chat), user.id, "join_request_approved_mute"
@@ -763,6 +777,7 @@ async def on_join_request(ctx: Ctx) -> None:
             user.id,
             chat_id_of(chat),
             ban,
+            exc_info=ban,
         )
         # * Fail closed on outage: decline rather than allow a possibly
         # * banned user to enter until state is proven clean.

@@ -178,7 +178,9 @@ async def request_admin(
             user=Safe(user_ref(target_id, target_fname)),
         )
     if isinstance(request_id, BaseException):
-        log.error("Failed to enqueue promotion request: %s", request_id)
+        log.error(
+            "Failed to enqueue promotion request: %s", request_id, exc_info=request_id
+        )
         return False, t("admins.promote.queue_fail", locale)
     if isinstance(owner_id, BaseException):
         owner_id = None

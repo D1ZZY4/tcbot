@@ -123,6 +123,7 @@ async def execute_mute(bot: Client, ctx: Ctx, meta: dict[str, Any]) -> None:
             proof_upload = await proof_task
         except asyncio.CancelledError:
             proof_task.cancel()
+            await asyncio.gather(proof_task, return_exceptions=True)
             raise
         except Exception:
             log.warning("Mute proof upload skipped for target=%d", target_id)
@@ -216,6 +217,7 @@ async def execute_mute(bot: Client, ctx: Ctx, meta: dict[str, Any]) -> None:
             "execute_mute: mute DB write failed for target=%d (%s)",
             target_id,
             record_r,
+            exc_info=record_r,
         )
         await safe_edit_message(
             bot,
@@ -331,7 +333,7 @@ async def execute_mute(bot: Client, ctx: Ctx, meta: dict[str, Any]) -> None:
     )
     throw_if_cancelled((log_send_r, edit_r))
     if isinstance(log_send_r, BaseException):
-        log.error("Mute log send failed: %s", log_send_r)
+        log.error("Mute log send failed: %s", log_send_r, exc_info=log_send_r)
     if isinstance(edit_r, BaseException):
         msg = ctx.effective_message
         if msg:
@@ -545,7 +547,7 @@ async def execute_unmute(
     )
     throw_if_cancelled(results)
     if isinstance(results[0], BaseException):
-        log.error("Unmute log send failed: %s", results[0])
+        log.error("Unmute log send failed: %s", results[0], exc_info=results[0])
     if isinstance(results[1], BaseException):
         log.debug("execute_unmute reply failed: %s", results[1])
 

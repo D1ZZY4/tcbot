@@ -175,7 +175,12 @@ class Demote:
         if isinstance(log_result, BaseException):
             # * Error-level so a silent audit gap ships to LOG_ERRORS; the
             # * role itself was already removed, so this never blocks the caller.
-            log.error("Demote log send failed for target=%d: %s", target_id, log_result)
+            log.error(
+                "Demote log send failed for target=%d: %s",
+                target_id,
+                log_result,
+                exc_info=log_result,
+            )
         if isinstance(dm_result, BaseException):
             if is_forbidden(dm_result) or is_benign_telegram_error(dm_result):
                 # * Expected when the target never started the bot, blocked

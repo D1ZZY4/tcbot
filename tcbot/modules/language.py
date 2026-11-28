@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 
 from pyrogram.types import InlineKeyboardMarkup
@@ -24,6 +25,7 @@ from tcbot.modules.helper.messages import (
     safe_edit_cb,
 )
 from tcbot.modules.helper.rich.formats import heading, quote
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import (
     Safe,
     available_locales,
@@ -118,6 +120,24 @@ def _confirmation_text(scope: str, chosen: str) -> str:
     if scope == "user":
         return t("language.updated_user", chosen, language=name)
     return t("language.updated_group", chosen, language=name)
+
+
+async def _ack_and_notice(q: object, msg: object, text: str, *, label: str) -> None:
+    """Acknowledge a refused tap and reply to its message in parallel.
+
+    The callback answer and the reply address different surfaces and carry no
+    shared payload, so one round trip suffices. Both helpers swallow normal
+    failures; cancellation must still propagate.
+    """
+    if msg is None:
+        await answer_ack(q)  # type: ignore[arg-type]
+        return
+    ack_r, reply_r = await asyncio.gather(
+        answer_ack(q),  # type: ignore[arg-type]
+        reply_rich(msg, text, log_label=label),  # type: ignore[arg-type]
+        return_exceptions=True,
+    )
+    throw_if_cancelled((ack_r, reply_r))
 
 
 # ──────────────────────── Command Handlers ───────────────────────── #
@@ -293,51 +313,44 @@ async def on_lang_set(ctx: Ctx) -> None:
             log.debug("language is_connected failed for %d: %s", chat_id_of(chat), exc)
             connected = False
         if not connected:
-            await answer_ack(q)
-            if msg is not None:
-                await reply_rich(
-                    msg,
-                    t("language.not_connected", tapper_locale),
-                    log_label="language not-connected",
-                )
+            await _ack_and_notice(
+                q,
+                msg,
+                t("language.not_connected", tapper_locale),
+                label="language not-connected",
+            )
             return
         try:
             saved = await db.groups_db.set_group_locale(chat_id_of(chat), locale)
         except Exception:
             log.exception("set_group_locale failed for chat %d", chat_id_of(chat))
-            await answer_ack(q)
-            if msg is not None:
-                await reply_rich(
-                    msg,
-                    t("common.retry", tapper_locale),
-                    log_label="language group-save-fail",
-                )
+            await _ack_and_notice(
+                q,
+                msg,
+                t("common.retry", tapper_locale),
+                label="language group-save-fail",
+            )
             return
         if not saved:
             # * An infrastructure chat without a settings row is an UPDATE
             # * that matches nothing. Never claim the locale was saved when
             # * no row changed; the next render would still use the default.
             log.warning("set_group_locale matched no row for chat %d", chat_id_of(chat))
-            await answer_ack(q)
-            if msg is not None:
-                await reply_rich(
-                    msg,
-                    t("common.retry", tapper_locale),
-                    log_label="language group-no-row",
-                )
+            await _ack_and_notice(
+                q, msg, t("common.retry", tapper_locale), label="language group-no-row"
+            )
             return
     else:
         try:
             await db.settings_db.set_user_locale(user.id, locale)
         except Exception:
             log.exception("set_user_locale failed for user %d", user.id)
-            await answer_ack(q)
-            if msg is not None:
-                await reply_rich(
-                    msg,
-                    t("common.retry", tapper_locale),
-                    log_label="language user-save-fail",
-                )
+            await _ack_and_notice(
+                q,
+                msg,
+                t("common.retry", tapper_locale),
+                label="language user-save-fail",
+            )
             return
     await answer_ack(q)
     await safe_edit_cb(

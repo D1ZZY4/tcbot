@@ -137,6 +137,7 @@ async def cmd_unban(ctx: Ctx) -> None:
             "get_active_ban speculative pre-fetch failed for user=%d: %s",
             target_id,
             pre_ban,
+            exc_info=pre_ban,
         )
         pre_ban = None
     if isinstance(role_result, BaseException):

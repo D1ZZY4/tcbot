@@ -244,10 +244,20 @@ async def execute_ban(bot: Client, msgs: list[Message], meta: dict[str, Any]) ->
     try:
         # * Target locale and active-ban read are independent; gather them so
         # * the critical ban path pays one round trip, not two.
-        target_locale, existing = await asyncio.gather(
-            locale_for_user(target_id),
-            db.bans_db.get_active_ban(target_id),
+        # * Collect both outcomes: a plain gather cancels no sibling, but it
+        # * abandons the other awaitable the moment one of them raises.
+        results: list[Any] = list(
+            await asyncio.gather(
+                locale_for_user(target_id),
+                db.bans_db.get_active_ban(target_id),
+                return_exceptions=True,
+            )
         )
+        throw_if_cancelled(results)
+        for result in results:
+            if isinstance(result, BaseException):
+                raise result
+        target_locale, existing = results
         is_update = existing is not None
         bot_username = (await bot_identity(bot)).username or ""
         ban_id = (
@@ -593,7 +603,12 @@ async def execute_ban(bot: Client, msgs: list[Message], meta: dict[str, Any]) ->
             except Exception as exc:
                 log.debug("Ban summary fallback send failed: %s", exc)
         if isinstance(upsert_result, BaseException):
-            log.error("upsert_user failed for target=%d: %s", target_id, upsert_result)
+            log.error(
+                "upsert_user failed for target=%d: %s",
+                target_id,
+                upsert_result,
+                exc_info=upsert_result,
+            )
     else:
         upsert_result, pm_result = await asyncio.gather(
             db.users_cache.upsert_user(target_id, None, target_fname),
@@ -606,6 +621,7 @@ async def execute_ban(bot: Client, msgs: list[Message], meta: dict[str, Any]) ->
                 "upsert_user (no-prompt path) failed for target=%d: %s",
                 target_id,
                 upsert_result,
+                exc_info=upsert_result,
             )
     if is_user_unreachable(pm_result):
         log.info(

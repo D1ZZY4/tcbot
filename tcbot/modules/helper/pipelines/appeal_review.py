@@ -458,6 +458,7 @@ class ApproveMixin:
                 target_id,
                 ban_id,
                 unban_log_r,
+                exc_info=unban_log_r,
             )
         return True
 
@@ -548,9 +549,11 @@ class RejectMixin:
         ):
             log.debug("reject_appeal name fetch failed: %s", name_r)
         target_locale = await locale_for_user(target_id)
-        card_ok = True
-        try:
-            card_ok = await safe_edit_cb(
+        # * The card edit and the target DM address different chats and share
+        # * no payload, so they go out together. A failed card edit still
+        # * queues the durable outbox close below; the DM failure is logged.
+        card_r, dm_r = await asyncio.gather(
+            safe_edit_cb(
                 q,
                 t(
                     "appeals.decision.reject_card",
@@ -558,25 +561,8 @@ class RejectMixin:
                     admin=Safe(user_ref(admin.id, display_name(admin))),
                 ),
                 clear_markup=True,
-            )
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            log.warning(
-                "reject_appeal review-card edit failed for ban %s: %s", ban_id, exc
-            )
-            # * The decision is already committed, so an edit failure is not a
-            # * reason to abort: the durable outbox must close the live card.
-            card_ok = False
-        if not card_ok:
-            action_id = int(ban.get("id") or 0)
-            review_id = int(ban.get("review_message_id") or 0)
-            if action_id and review_id and cfg.main_group:
-                await db.notifications_db.enqueue_review_card_edit(
-                    action_id, cfg.main_group, review_id
-                )
-        try:
-            await send_text(
+            ),
+            send_text(
                 bot,
                 target_id,
                 t(
@@ -584,11 +570,24 @@ class RejectMixin:
                     target_locale,
                     ban_id=Safe(code(ban_id)),
                 ),
+            ),
+            return_exceptions=True,
+        )
+        throw_if_cancelled((card_r, dm_r))
+        if isinstance(card_r, BaseException):
+            log.warning(
+                "reject_appeal review-card edit failed for ban %s: %s", ban_id, card_r
             )
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            log.warning("reject_appeal DM to %d failed: %s", target_id, exc)
+        card_ok = not (isinstance(card_r, BaseException) or card_r is False)
+        if isinstance(dm_r, BaseException):
+            log.warning("reject_appeal DM to %d failed: %s", target_id, dm_r)
+        if not card_ok:
+            action_id = int(ban.get("id") or 0)
+            review_id = int(ban.get("review_message_id") or 0)
+            if action_id and review_id and cfg.main_group:
+                await db.notifications_db.enqueue_review_card_edit(
+                    action_id, cfg.main_group, review_id
+                )
         await _update_or_send_log(
             bot,
             lc,
@@ -702,7 +701,12 @@ class AppealReviewMixin(AppealVerdictsMixin):
                 log.debug("Appeal not-authorized answer failed: %s", exc)
             return
         if isinstance(ban_result, BaseException):
-            log.error("get_ban failed in appeal review for %s: %s", ban_id, ban_result)
+            log.error(
+                "get_ban failed in appeal review for %s: %s",
+                ban_id,
+                ban_result,
+                exc_info=ban_result,
+            )
             try:
                 await q.answer(
                     t("appeals.review.db_retry", locale, plain=True),

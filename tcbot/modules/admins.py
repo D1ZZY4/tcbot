@@ -320,6 +320,7 @@ async def on_promote_role_btn(ctx: Ctx) -> None:
             "target role lookup failed during promote callback for target=%d: %s",
             target_id,
             current_role,
+            exc_info=current_role,
         )
         await cb_error_edit(
             q,
@@ -549,6 +550,7 @@ async def on_demote_confirm(ctx: Ctx) -> None:
             "target role lookup failed during demote callback for target=%d: %s",
             target_id,
             target_role,
+            exc_info=target_role,
         )
         await cb_error_edit(
             q,
@@ -626,6 +628,11 @@ async def on_demote_confirm(ctx: Ctx) -> None:
             target_id,
             executor_result,
             target_result,
+            exc_info=next(
+                r
+                for r in (executor_result, target_result)
+                if isinstance(r, BaseException)
+            ),
         )
         await cb_error_edit(
             q,
@@ -899,9 +906,7 @@ async def cmd_promote_list(ctx: Ctx) -> None:
                     t(
                         "admins.list.header_text",
                         locale,
-                        n=total_pending
-                        if total_pending > len(pending)
-                        else len(pending),
+                        n=max(total_pending, len(pending)),
                         plain=True,
                     )
                 )

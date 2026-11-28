@@ -179,12 +179,22 @@ class CheckProfileMixin:
         kick_total = count_or_unknown(8)
         mute_total = count_or_unknown(9)
         if isinstance(r_user_info, BaseException):
-            log.error("_resolve_user_info failed for %d: %s", target_id, r_user_info)
+            log.error(
+                "_resolve_user_info failed for %d: %s",
+                target_id,
+                r_user_info,
+                exc_info=r_user_info,
+            )
             fname, uname = str(target_id), None
         else:
             fname, uname = cast("tuple[str, str | None]", r_user_info)
         if isinstance(r_role_meta, BaseException):
-            log.error("role_meta failed for %d: %s", target_id, r_role_meta)
+            log.error(
+                "role_meta failed for %d: %s",
+                target_id,
+                r_role_meta,
+                exc_info=r_role_meta,
+            )
             role, role_by_id, role_at = None, None, None
         else:
             role, role_by_id, role_at = cast(
@@ -500,12 +510,14 @@ async def _ban_list_render(
         item_kwargs["time"] = Safe(item_time)
         if show_reason:
             stored_reason = ban.get("reason", None)
-            reason_short = str(
-                stored_reason
+            # * The fallback catalog value already carries rich italic markup;
+            # * rendering it in plain mode would show the literal tilde markers.
+            reason_short = (
+                Safe(italic(str(stored_reason)[:_BAN_LIST_REASON_LEN]))
                 if stored_reason is not None
-                else t("checking.events.no_reason", locale, plain=True)
-            )[:_BAN_LIST_REASON_LEN]
-            item_kwargs["reason"] = Safe(italic(reason_short))
+                else Safe(t("checking.events.no_reason", locale))
+            )
+            item_kwargs["reason"] = reason_short
         lines.append(t(f"checking.{key_prefix}.item", locale, **item_kwargs))
         items.append(
             (
@@ -664,11 +676,11 @@ class CheckEventsMixin:
             date_s = date_or_unknown(raw_ts, locale)
             time_s = time_or_unknown(raw_ts, locale)
             stored_reason = w.get("reason", None)
-            reason_short = str(
-                stored_reason
+            reason_short = (
+                Safe(italic(str(stored_reason)[:_REASON_PREVIEW_LEN]))
                 if stored_reason is not None
-                else t("checking.events.no_reason", locale, plain=True)
-            )[:_REASON_PREVIEW_LEN]
+                else Safe(t("checking.events.no_reason", locale))
+            )
             admin_id = w.get("actor_user_id", 0)
             admin_fallback = t("checking.profile.admin_fallback", locale, plain=True)
             admin_name = (
@@ -683,7 +695,7 @@ class CheckEventsMixin:
                     i=base_idx + i,
                     date=Safe(date_s),
                     time=Safe(time_s),
-                    reason=Safe(italic(reason_short)),
+                    reason=reason_short,
                     admin=Safe(user_ref(admin_id, admin_name)),
                 )
             )
@@ -798,11 +810,11 @@ async def _per_chat_event_list(
         date_s = date_or_unknown(raw_ts, locale)
         time_s = time_or_unknown(raw_ts, locale)
         stored_reason = rec.get("reason", None)
-        reason_short = str(
-            stored_reason
+        reason_short = (
+            Safe(italic(str(stored_reason)[:_REASON_PREVIEW_LEN]))
             if stored_reason is not None
-            else t("checking.events.no_reason", locale, plain=True)
-        )[:_REASON_PREVIEW_LEN]
+            else Safe(t("checking.events.no_reason", locale))
+        )
         chat_id = rec.get("chat_id", 0)
         title = titles.get(chat_id) or str(chat_id)
         admin_id = rec.get("actor_user_id", 0)
@@ -835,7 +847,7 @@ async def _per_chat_event_list(
                     title=title,
                     requested=requested,
                     stored=stored,
-                    reason=Safe(italic(reason_short)),
+                    reason=reason_short,
                     admin=Safe(user_ref(admin_id, admin_name)),
                 )
             )
@@ -847,7 +859,7 @@ async def _per_chat_event_list(
                 date=Safe(date_s),
                 time=Safe(time_s),
                 title=title,
-                reason=Safe(italic(reason_short)),
+                reason=reason_short,
                 admin=Safe(user_ref(admin_id, admin_name)),
             )
             if show_status and rec.get("status") == "failed":

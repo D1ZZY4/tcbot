@@ -148,6 +148,7 @@ class ConnectionAddedMixin:
                         label,
                         chat_id_of(chat),
                         result,
+                        exc_info=result,
                     )
             if was_connected:
                 try:

@@ -250,7 +250,7 @@ async def ack_and_render(
     ans, result = await asyncio.gather(answer_ack(q), data_coro, return_exceptions=True)
     throw_if_cancelled((ans, result))
     if isinstance(result, BaseException):
-        log.error("ack_and_render data fetch failed: %s", result)
+        log.error("ack_and_render data fetch failed: %s", result, exc_info=result)
         if fallback is not None:
             error_text, error_btn = fallback
             await safe_edit_cb(

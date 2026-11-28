@@ -437,7 +437,7 @@ async def _process_run(
         for result in settled:
             if isinstance(result, BaseException):
                 update_failed = True
-                log.error("Enforcement target ctx failed: %s", result)
+                log.error("Enforcement target ctx failed: %s", result, exc_info=result)
         if warn_clear_user:
             landed = [
                 as_int(target.get("chat_id"))

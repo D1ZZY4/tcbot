@@ -225,7 +225,7 @@ async def expire_stale_records() -> None:
     failures = [r for r in (members_res, erasures_res) if isinstance(r, BaseException)]
     if failures:
         for failure in failures:
-            log.error("Stale record cleanup failed: %s", failure)
+            log.error("Stale record cleanup failed: %s", failure, exc_info=failure)
         raise RuntimeError(
             "Stale record cleanup incomplete; see errors above."
         ) from failures[0]

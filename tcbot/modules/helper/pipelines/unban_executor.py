@@ -347,7 +347,9 @@ async def execute_unban(
             log_text,
         )
     if isinstance(log_r, BaseException):
-        log.error("Unban log send failed for user %d: %s", target_id, log_r)
+        log.error(
+            "Unban log send failed for user %d: %s", target_id, log_r, exc_info=log_r
+        )
 
 
 __all__ = ["execute_unban"]

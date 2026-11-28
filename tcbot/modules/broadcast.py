@@ -198,7 +198,7 @@ async def cmd_broadcast(ctx: Ctx) -> None:
     if isinstance(edit_r, BaseException):
         log.debug("Broadcast status edit failed: %s", edit_r)
     if isinstance(log_r, BaseException):
-        log.error("Broadcast log send failed: %s", log_r)
+        log.error("Broadcast log send failed: %s", log_r, exc_info=log_r)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

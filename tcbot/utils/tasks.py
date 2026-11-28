@@ -97,8 +97,17 @@ class TaskTracker:
         # * asyncio.wait() leaves pending tasks running on timeout; wait_for()
         # * would cancel them and then wait indefinitely for that cancellation,
         # * which a task suppressing one CancelledError can stretch forever.
-        _, pending = await asyncio.wait(live, timeout=timeout)
+        # * Shield both waits so a second cancellation during shutdown cannot
+        # * skip the cancel-pending branch and strand tracked work.
+        cancelled: asyncio.CancelledError | None = None
+        try:
+            _, pending = await asyncio.shield(asyncio.wait(live, timeout=timeout))
+        except asyncio.CancelledError as exc:
+            cancelled = exc
+            pending = [task for task in live if not task.done()]
         if not pending:
+            if cancelled is not None:
+                raise cancelled
             return
         if not cancel:
             log.debug(
@@ -107,6 +116,8 @@ class TaskTracker:
                 len(pending),
                 timeout,
             )
+            if cancelled is not None:
+                raise cancelled
             return
         log.debug(
             "%s: %d task(s) still running after %.1fs; cancelling.",
@@ -116,10 +127,17 @@ class TaskTracker:
         )
         for task in pending:
             task.cancel()
-        _, pending = await asyncio.wait(pending, timeout=timeout)
+        try:
+            _, pending = await asyncio.shield(asyncio.wait(pending, timeout=timeout))
+        except asyncio.CancelledError as exc:
+            if cancelled is None:
+                cancelled = exc
+            pending = [task for task in pending if not task.done()]
         if pending:
             log.debug(
                 "%s: %d task(s) survived cancellation; leaving them.",
                 self._label,
                 len(pending),
             )
+        if cancelled is not None:
+            raise cancelled

@@ -102,7 +102,12 @@ async def execute_promo_decision(ctx: Ctx) -> None:
         await answer_alert(q, replies.perm_owner_only(locale, plain=True))
         return
     if isinstance(req_result, BaseException):
-        log.error("get_request_by_id failed for %s: %s", request_id, req_result)
+        log.error(
+            "get_request_by_id failed for %s: %s",
+            request_id,
+            req_result,
+            exc_info=req_result,
+        )
         await answer_ack(q)
         await safe_edit_cb(
             q,

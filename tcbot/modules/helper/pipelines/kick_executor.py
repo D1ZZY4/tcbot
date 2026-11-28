@@ -97,6 +97,7 @@ async def execute_kick(
             proof_upload = await proof_task
         except asyncio.CancelledError:
             proof_task.cancel()
+            await asyncio.gather(proof_task, return_exceptions=True)
             raise
         except Exception:
             log.warning("Kick proof upload skipped for target=%d", target_id)
@@ -301,7 +302,9 @@ async def execute_kick(
                     await _queue_unban_repair()
         kick_delivered = not isinstance(unban_result, BaseException)
         if isinstance(log_send_result, BaseException):
-            log.error("Kick log send failed: %s", log_send_result)
+            log.error(
+                "Kick log send failed: %s", log_send_result, exc_info=log_send_result
+            )
         unban_warning = (
             Safe(t("kicking.warn.unban", locale))
             if isinstance(unban_result, BaseException)

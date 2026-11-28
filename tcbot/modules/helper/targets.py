@@ -117,7 +117,9 @@ async def resolve_executor_target(
     if executor_role is None:
         return None
     if isinstance(_target_r, BaseException):
-        log.error("extract_target failed during %s: %s", action, _target_r)
+        log.error(
+            "extract_target failed during %s: %s", action, _target_r, exc_info=_target_r
+        )
         await reply_rich(
             msg,
             replies.err_cannot_resolve(locale, plain=True),
@@ -164,6 +166,7 @@ async def classify_and_load_role(
             action,
             target_id,
             ident_r,
+            exc_info=ident_r,
         )
         await reply_rich(
             msg,
@@ -178,6 +181,7 @@ async def classify_and_load_role(
             action,
             target_id,
             role_r,
+            exc_info=role_r,
         )
         await reply_rich(
             msg,

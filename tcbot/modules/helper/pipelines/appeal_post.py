@@ -126,11 +126,15 @@ async def post_appeal(
         )
         throw_if_cancelled((rv_appeals, sent_log, markup))
         if isinstance(sent_log, BaseException):
-            log.error("Appeal log failed: %s", sent_log)
+            log.error("Appeal log failed: %s", sent_log, exc_info=sent_log)
         else:
             appeal_log_sent_id = sent_log.id
         if isinstance(rv_appeals, BaseException):
-            log.error("Appeal review copy to APPEALS failed: %s", rv_appeals)
+            log.error(
+                "Appeal review copy to APPEALS failed: %s",
+                rv_appeals,
+                exc_info=rv_appeals,
+            )
         else:
             appeals_review_id = rv_appeals.id
         if markup is False or isinstance(markup, BaseException):

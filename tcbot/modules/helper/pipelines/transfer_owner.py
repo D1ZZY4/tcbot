@@ -217,6 +217,10 @@ async def execute_transfer(ctx: Ctx) -> None:
     )
     throw_if_cancelled((transfer_log_r, transfer_reply_r))
     if isinstance(transfer_log_r, BaseException):
-        log.error("Ownership transfer log send failed: %s", transfer_log_r)
+        log.error(
+            "Ownership transfer log send failed: %s",
+            transfer_log_r,
+            exc_info=transfer_log_r,
+        )
     if isinstance(transfer_reply_r, BaseException):
         log.debug("Ownership transfer reply failed: %s", transfer_reply_r)

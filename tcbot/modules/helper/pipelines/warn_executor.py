@@ -101,6 +101,7 @@ async def execute_warn(
             proof_upload = await proof_task
         except asyncio.CancelledError:
             proof_task.cancel()
+            await asyncio.gather(proof_task, return_exceptions=True)
             raise
         except Exception:
             log.warning("Warn proof upload skipped for target=%d", target_id)
@@ -313,6 +314,7 @@ async def execute_warn(
                 "enforcing reduced scope",
                 target_id,
                 groups_result,
+                exc_info=groups_result,
             )
         groups: list = [] if groups_fetch_failed else groups_result
         already_banned = (
@@ -576,7 +578,7 @@ async def execute_warn(
     )
     throw_if_cancelled(results2)
     if isinstance(results2[0], BaseException):
-        log.error("Warn log send failed: %s", results2[0])
+        log.error("Warn log send failed: %s", results2[0], exc_info=results2[0])
 
 
 # ───────────────────────── Warn management ──────────────────────── #
@@ -739,7 +741,7 @@ async def execute_unwarn(
     )
     throw_if_cancelled(results)
     if isinstance(results[0], BaseException):
-        log.error("Unwarn log send failed: %s", results[0])
+        log.error("Unwarn log send failed: %s", results[0], exc_info=results[0])
 
 
 async def execute_warnlist(
@@ -900,7 +902,10 @@ async def execute_resetwarns(
         # * This is a captured gather value, not an active exception; using
         # * log.exception here would attach a spurious "NoneType: None".
         log.error(
-            "Reset-warns log send failed for target=%d: %s", target_id, results[0]
+            "Reset-warns log send failed for target=%d: %s",
+            target_id,
+            results[0],
+            exc_info=results[0],
         )
 
 

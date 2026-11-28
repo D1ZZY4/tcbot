@@ -266,7 +266,10 @@ async def on_bans_search_input(ctx: Ctx) -> None:
         # * The query is member-authored text. ERROR records reach the staff
         # * channel, so log its shape rather than its contents.
         log.error(
-            "Stats search failed for a %d-character query: %s", len(query), results
+            "Stats search failed for a %d-character query: %s",
+            len(query),
+            results,
+            exc_info=results,
         )
         await _search_notice(ctx, msg, locale)
         return
