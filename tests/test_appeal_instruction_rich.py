@@ -58,11 +58,11 @@ def test_instruction_quotes_the_bans_real_log_message() -> None:
 def test_numeric_log_channel_uses_the_real_message_id() -> None:
     text = instruction_text(
         community_name="TCF",
-        log_channel="-1003941141635",
+        log_channel="-1001234567890",
         locale="en-US",
         log_message_id=743,
     )
-    assert "https://t.me/c/3941141635/743" in text
+    assert "https://t.me/c/1234567890/743" in text
 
 
 @pytest.mark.parametrize("locale", ["en-US", "id-ID"])
@@ -71,10 +71,18 @@ def test_invalid_log_reply_names_the_expected_link(locale: str) -> None:
     text = t(
         "appeals.submit.invalid_log",
         locale,
-        log_link=Safe(link("Log message", "https://t.me/c/3941141635/743")),
+        log_link=Safe(link("Log message", "https://t.me/c/1234567890/743")),
         plain=True,
     )
-    assert "https://t.me/c/3941141635/743" in text
+    assert "https://t.me/c/1234567890/743" in text
+
+
+@pytest.mark.parametrize(
+    ("locale", "expected"),
+    [("en-US", "Log message"), ("id-ID", "Pesan log")],
+)
+def test_invalid_log_notice_label_is_localized(locale: str, expected: str) -> None:
+    assert t("appeals.submit.log_link_label", locale, plain=True) == expected
 
 
 def test_invite_link_falls_back_to_the_chat_id() -> None:
@@ -84,6 +92,6 @@ def test_invite_link_falls_back_to_the_chat_id() -> None:
         log_channel="https://t.me/+invite-code",
         locale="en-US",
         log_message_id=743,
-        log_chat_id=-1003941141635,
+        log_chat_id=-1001234567890,
     )
-    assert "https://t.me/c/3941141635/743" in text
+    assert "https://t.me/c/1234567890/743" in text

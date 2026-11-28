@@ -61,6 +61,8 @@ session_ended = "Appeal session ended."
 too_long = "Your appeal message is too long (max {max} characters). Please shorten it and try again."
 session_expired = "Session expired - please start the appeal again."
 invalid_log = "Invalid log link. Quote the number from your ban log: {log_link}"
+# Label of the example link in the invalid-log notice. Plain mode; link() escapes it.
+log_link_label = "Log message"
 submitted = "Your appeal has been submitted. The team will review it shortly - we'll get back to you."
 delivery_failed = "We could not deliver your appeal to the moderation team right now. Please try again in a few minutes; if this keeps happening, contact a staff member directly."
 

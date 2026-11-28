@@ -359,7 +359,10 @@ class SubmitMessageMixin:
         if not log_msg_id:
             log_msg_id = fresh_ban.get("log_message_id", 0)
         if log_msg_id and not text_references_log_message(text, log_msg_id):
-            expected = link("Log message", message_link(self.log_channel, log_msg_id))
+            expected = link(
+                t("appeals.submit.log_link_label", locale, plain=True),
+                message_link(self.log_channel, log_msg_id),
+            )
             await reply_rich(
                 msg,
                 t(

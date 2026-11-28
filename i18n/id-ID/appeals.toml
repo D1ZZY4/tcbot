@@ -61,6 +61,8 @@ session_ended = "Sesi banding berakhir."
 too_long = "Pesan bandingmu terlalu panjang (maks {max} karakter). Persingkat lalu coba lagi."
 session_expired = "Sesi kedaluwarsa, mulai lagi bandingnya."
 invalid_log = "Tautan log tidak valid. Sertakan nomor dari log ban Anda: {log_link}"
+# Label tautan contoh pada pemberitahuan log tidak valid. Mode plain; link() meng-escape.
+log_link_label = "Pesan log"
 submitted = "Bandingmu sudah dikirim. Tim akan segera meninjaunya dan mengabarimu."
 delivery_failed = "Bandingmu tidak bisa diteruskan ke tim moderasi sekarang. Coba lagi beberapa menit lagi; jika terus terjadi, hubungi staf langsung."
 
