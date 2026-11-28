@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
+import logging
 from typing import Any
 
 import pytest
@@ -20,6 +22,7 @@ from tcbot.modules.helper.pipelines.connect_replay import (
     _REPLAY_QUEUE_ATTEMPTS,
 )
 from tcbot.modules.helper.pipelines.errors.exceptions import BadRequest
+from tcbot.utils.circuit_breaker import CircuitOpenError
 
 
 @pytest.fixture(autouse=True)
@@ -106,7 +109,10 @@ def _install_world(
     queued: list[tuple[int, list[int], int | None]] = []
 
     async def _queue_replay(
-        chat_id: int, user_ids: list[int], requested_by_user_id: int | None
+        chat_id: int,
+        user_ids: list[int],
+        requested_by_user_id: int | None,
+        **_kwargs: Any,
     ) -> int:
         queued.append((chat_id, list(user_ids), requested_by_user_id))
         return len(user_ids)
@@ -271,7 +277,9 @@ def test_a_transient_replay_queue_failure_is_retried(
     monkeypatch.setattr(connect_replay, "_REPLAY_QUEUE_BACKOFF", 0.0)
     attempts = 0
 
-    async def _flaky_queue(chat_id: int, user_ids: list[int], by: int | None) -> int:
+    async def _flaky_queue(
+        chat_id: int, user_ids: list[int], by: int | None, **_kwargs: Any
+    ) -> int:
         nonlocal attempts
         attempts += 1
         if attempts == 1:
@@ -297,7 +305,9 @@ def test_an_exhausted_replay_queue_failure_is_surfaced(
     monkeypatch.setattr(connect_replay, "_REPLAY_QUEUE_BACKOFF", 0.0)
     attempts = 0
 
-    async def _broken_queue(chat_id: int, user_ids: list[int], by: int | None) -> int:
+    async def _broken_queue(
+        chat_id: int, user_ids: list[int], by: int | None, **_kwargs: Any
+    ) -> int:
         nonlocal attempts
         attempts += 1
         raise RuntimeError("db down")
@@ -319,7 +329,9 @@ def test_a_failed_replay_undoes_the_activation(
     """A failed queue write must not leave an active, unenforced group."""
     monkeypatch.setattr(connect_replay, "_REPLAY_QUEUE_BACKOFF", 0.0)
 
-    async def _broken_queue(chat_id: int, user_ids: list[int], by: int | None) -> int:
+    async def _broken_queue(
+        chat_id: int, user_ids: list[int], by: int | None, **_kwargs: Any
+    ) -> int:
         raise RuntimeError("db down")
 
     deactivated: list[int] = []
@@ -385,3 +397,60 @@ def test_a_welcome_permission_probe_failure_has_no_note() -> None:
     )
 
     assert note == ""
+
+
+def test_a_circuit_skipped_ban_is_not_counted_as_applied(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A skipped slot never reached Telegram and must not look applied."""
+
+    async def _skipped(coros: list[Any]) -> list[BaseException]:
+        results: list[BaseException] = []
+        for coro in coros:
+            if inspect.iscoroutine(coro):
+                coro.close()
+            results.append(CircuitOpenError("Telegram circuit is OPEN; call skipped."))
+        return results
+
+    monkeypatch.setattr(connect_replay, "fan_out", _skipped)
+    queued = _install_world(monkeypatch, ban_uids=[11])
+
+    with caplog.at_level(
+        logging.INFO, logger="tcbot.modules.helper.pipelines.connect_replay"
+    ):
+        blind = asyncio.run(
+            _join().complete_join(-100, "Group", 1, "Owner", _FakeBot())
+        )  # type: ignore[arg-type]
+
+    assert blind is True
+    assert queued == [(-100, [11], 1)]
+    assert "0 bans and 0 mutes applied." in caplog.text
+
+
+def test_incomplete_replay_is_not_an_exceptionless_error(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A durably queued remainder is an operational warning, not a code bug.
+
+    The error reporter turns an ERROR record without an exception into an
+    "Unknown / needs a code fix" card. The remainder is queued and the group
+    owner already sees the blind-connect notice, so that card was noise.
+    """
+    _install_world(monkeypatch, ban_uids=[11])
+    monkeypatch.setattr(connect_replay, "_REPLAY_BUDGET_S", 0.0)
+
+    with caplog.at_level(
+        logging.WARNING, logger="tcbot.modules.helper.pipelines.connect_replay"
+    ):
+        blind = asyncio.run(
+            _join().complete_join(-100, "Group", 1, "Owner", _FakeBot())
+        )  # type: ignore[arg-type]
+
+    assert blind is True
+    relevant = [
+        record
+        for record in caplog.records
+        if "incomplete enforcement replay" in record.getMessage()
+    ]
+    assert relevant
+    assert all(record.levelno == logging.WARNING for record in relevant)

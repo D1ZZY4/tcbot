@@ -242,7 +242,13 @@ _TARGET_UPDATE = text(
            last_error_kind = :error_kind,
            last_error_code = :error_code,
            last_error_detail = :error_detail,
-           next_retry_at = :next_retry_at,
+           next_retry_at = CASE
+               WHEN CAST(:retry_after_seconds AS double precision) IS NOT NULL
+                   THEN now() + make_interval(
+                       secs => CAST(:retry_after_seconds AS double precision)
+                   )
+               ELSE NULL
+           END,
            updated_at = now()
      WHERE id = :target_id
     """
@@ -371,11 +377,12 @@ _KICK_ACTION_EXISTS = text(
 
 _CONNECT_REPLAY_ACTIONS = text(
     """
-    SELECT id, target_user_id, action_type
-      FROM moderation_actions
-     WHERE status = 'active'
-       AND action_type IN ('ban', 'mute')
-       AND target_user_id = ANY(:user_ids)
+    SELECT a.id, a.target_user_id, a.action_type
+      FROM moderation_actions AS a
+     WHERE a.status = 'active'
+       AND a.action_type IN ('ban', 'mute')
+       AND a.target_user_id = ANY(:user_ids)
+       AND (a.expires_at IS NULL OR a.expires_at > now())
     """
 )
 
@@ -561,6 +568,8 @@ async def queue_connect_replay(
     chat_id: int,
     user_ids: Sequence[int],
     requested_by_user_id: int | None,
+    *,
+    replay_token: str | None = None,
 ) -> int:
     """Queue one apply run per active ban or mute for a newly connected group.
 
@@ -580,7 +589,10 @@ async def queue_connect_replay(
             .mappings()
             .all()
         )
-        event = utc_now().strftime("%Y%m%dT%H%M%S")
+        # * A caller-supplied token identifies one connect invocation, so the
+        # * bounded retries of that invocation share one idempotency key. A
+        # * later reconnect gets a new token and therefore a new repair run.
+        event = replay_token or utc_now().strftime("%Y%m%dT%H%M%S")
         queued = 0
         for row in rows:
             action_id = int(row["id"])
@@ -887,7 +899,12 @@ async def complete_target(
         raise ValueError(f"Refusing unknown enforcement target status {status!r}")
     if outcome not in ("succeeded", "skipped", "failed"):
         raise ValueError(f"Refusing unknown enforcement outcome {outcome!r}")
-    next_retry_at = utc_now() + retry_after if retry_after is not None else None
+    # * The deadline is compared with PostgreSQL now() by the claim, report,
+    # * and requeue statements. Compute it on the server so a skew between the
+    # * host and the database cannot delay or prematurely admit a retry.
+    retry_after_seconds = (
+        retry_after.total_seconds() if retry_after is not None else None
+    )
 
     async def _work(sess: AsyncSession) -> None:
         attempt_number = await sess.scalar(_TARGET_LOCK, {"target_id": target_id})
@@ -912,7 +929,7 @@ async def complete_target(
                 "error_kind": error_kind,
                 "error_code": error_code,
                 "error_detail": error_detail,
-                "next_retry_at": next_retry_at,
+                "retry_after_seconds": retry_after_seconds,
             },
         )
 

@@ -242,6 +242,53 @@ async def test_a_connect_replay_remainder_is_queued_for_the_new_chat(
     assert [int(str(target["chat_id"])) for target in targets] == [-1001]
 
 
+async def test_a_queue_retry_with_one_replay_token_creates_one_run(
+    enforcement_ledger_ready: str,
+) -> None:
+    """Retries inside one connect invocation must not duplicate repair work."""
+    now = utc_now()
+    case_id = await seed_case(9, opened_by_user_id=7)
+    await seed_action(
+        "ban",
+        9,
+        actor_user_id=7,
+        case_id=case_id,
+        created_at=now - timedelta(hours=2),
+    )
+
+    first = await enforcement_ledger.queue_connect_replay(
+        -1001, [9], 7, replay_token="one-connect"
+    )
+    second = await enforcement_ledger.queue_connect_replay(
+        -1001, [9], 7, replay_token="one-connect"
+    )
+
+    assert first == 1
+    assert second == 1
+    assert len(await enforcement_ledger.claim_runs(limit=10)) == 1
+
+
+async def test_an_expired_but_unwept_decision_is_not_replayed(
+    enforcement_ledger_ready: str,
+) -> None:
+    """A timed decision must not be re-applied before the daily sweep marks it."""
+    now = utc_now()
+    case_id = await seed_case(9, opened_by_user_id=7)
+    await seed_action(
+        "ban",
+        9,
+        actor_user_id=7,
+        case_id=case_id,
+        created_at=now - timedelta(hours=2),
+        expires_at=now - timedelta(hours=1),
+    )
+
+    queued = await enforcement_ledger.queue_connect_replay(-1001, [9], 7)
+
+    assert queued == 0
+    assert await enforcement_ledger.claim_runs(limit=10) == []
+
+
 async def test_the_retention_sweep_records_a_registry_run(
     enforcement_ledger_ready: str,
 ) -> None:

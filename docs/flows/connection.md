@@ -142,9 +142,12 @@ whose result is not a benign no-op is also pending.
 
 Whatever the budget, cap, or a stopped replay leaves unapplied is still an active
 decision, and a failed decision-store read stops the connect before activation.
-`enforcement_ledger.queue_connect_replay()` writes one bounded, idempotent
-`apply` run per decision against the one new chat. The queue write is the
-durability boundary and is retried 3 times with 0.2 s backoff; exhausting it
+`enforcement_ledger.queue_connect_replay()` writes one `apply` run per still
+in-force decision against the one new chat, and skips a timed decision whose
+deadline has passed even before the daily sweep marks it expired. Idempotency
+is scoped to one connect invocation by a per-invocation token, so its retries
+share one key while a later reconnect files fresh repair work. The queue write
+is the durability boundary and is retried 3 times with 0.2 s backoff; exhausting it
 raises, because the group is already active and a lost queue write would leave
 active decisions unenforced with no durable record. A connection whose replay
 was truncated, timed out, or partly failed returns a "blind" flag and shows a

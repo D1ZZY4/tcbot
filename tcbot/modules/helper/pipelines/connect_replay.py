@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import secrets
 from typing import TYPE_CHECKING
 
 from pyrogram import Client
@@ -25,10 +26,11 @@ from tcbot.utils.dispatch import (
     fan_out,
     gather_bounded,
     is_benign_telegram_error,
+    is_circuit_skip,
     throw_if_cancelled,
 )
 from tcbot.utils.logger import get_logger
-from tcbot.utils.time_and_date import monotonic
+from tcbot.utils.time_and_date import monotonic, utc_now
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
@@ -105,7 +107,14 @@ class ConnectionReplayMixin:
             results = await fan_out(
                 [bot.ban_chat_member(chat_id, uid) for uid in chunk]
             )
-            applied += len(results) - count_transient_errors(results)
+            # * A circuit skip never reached Telegram. It is queued for repair
+            # * below, so it must not inflate the operator's applied count.
+            skipped = sum(
+                is_circuit_skip(result)
+                for result in results
+                if isinstance(result, BaseException)
+            )
+            applied += len(results) - count_transient_errors(results) - skipped
             failed.extend(
                 uid
                 for uid, result in zip(chunk, results, strict=True)
@@ -137,7 +146,14 @@ class ConnectionReplayMixin:
                     for doc in chunk
                 ]
             )
-            applied += len(results) - count_transient_errors(results)
+            # * A circuit skip never reached Telegram. It is queued for repair
+            # * below, so it must not inflate the operator's applied count.
+            skipped = sum(
+                is_circuit_skip(result)
+                for result in results
+                if isinstance(result, BaseException)
+            )
+            applied += len(results) - count_transient_errors(results) - skipped
             failed.extend(
                 doc
                 for doc, result in zip(chunk, results, strict=True)
@@ -207,6 +223,11 @@ class ConnectionReplayMixin:
             list(admins_result) if not isinstance(admins_result, BaseException) else []
         )
         replay_blind = False
+        queued = 0
+        # * One token per connect invocation: every retry of its queue write
+        # * reuses the same idempotency key, while a later reconnect gets a new
+        # * repair run instead of colliding with an already terminal one.
+        replay_token = f"{utc_now().strftime('%Y%m%dT%H%M%S%f')}-{secrets.token_hex(4)}"
         deadline = monotonic() + _REPLAY_BUDGET_S
         pending_ban_uids: list[int] = []
         pending_mute_docs: list[ActiveMuteDoc] = []
@@ -251,7 +272,7 @@ class ConnectionReplayMixin:
             for attempt in range(_REPLAY_QUEUE_ATTEMPTS):
                 try:
                     queued = await db.enforcement_ledger.queue_connect_replay(
-                        chat_id, pending_user_ids, owner_id
+                        chat_id, pending_user_ids, owner_id, replay_token=replay_token
                     )
                     break
                 except asyncio.CancelledError:
@@ -318,7 +339,16 @@ class ConnectionReplayMixin:
             applied_mutes,
         )
         if replay_blind:
-            log.error(
-                "Group %d connected with an incomplete enforcement replay.", chat_id
+            # * The remainder is durable work, and the group owner already sees
+            # * connected_blind_message. An ERROR here produced a report with
+            # * no exception ("Unknown / needs a code fix") for an expected
+            # * operational state; keep that level for a failed queue write.
+            log.warning(
+                "Group %d connected with an incomplete enforcement replay: "
+                "%d ban(s) and %d mute(s) left, %d repair run(s) queued.",
+                chat_id,
+                len(pending_ban_uids),
+                len(pending_mute_docs),
+                queued,
             )
         return replay_blind
