@@ -83,7 +83,7 @@ def _run(update: _FakeUpdate, ctx: _FakeCtx) -> Any:
 def test_kick_in_private_chat_refused(
     _staff_caller: None,
 ) -> None:
-    chat = _FakeChat(7146954165, "private")
+    chat = _FakeChat(1000000001, "private")
     msg = _FakeMsg("/tckick 5868266754 spam", chat)
     ctx = _FakeCtx()
     result = _run(_FakeUpdate(msg, _FakeUser(111), chat), ctx)

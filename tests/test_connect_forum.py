@@ -16,7 +16,7 @@ from pyrogram import ContinuePropagation
 from pyrogram.enums import ChatMemberStatus
 
 from tcbot.modules import connect as connect_module
-from tcbot.modules.helper.pipelines import connect_added
+from tcbot.modules.helper.pipelines import connect_added, connect_decision
 
 
 class _FakeBot:
@@ -426,7 +426,7 @@ async def test_join_decision_refuses_an_infrastructure_chat(
             return None
 
     q = _Query()
-    chat = _NS(id=-1004339701876, type="supergroup", title="Appeals")
+    chat = _NS(id=-1004000000001, type="supergroup", title="Appeals")
     update = _NS(
         callback_query=q,
         effective_chat=chat,
@@ -434,14 +434,14 @@ async def test_join_decision_refuses_an_infrastructure_chat(
         bot=_FakeBot(),
         user_data={},
     )
-    monkeypatch.setattr(
-        connect_added,
-        "cfg",
-        _NS(
-            is_primary_group=lambda _chat_id: False,
-            is_infrastructure_chat=lambda _chat_id: True,
-        ),
+    # * The decision handler owns its own config reference, so both modules
+    # * need the isolated gate; the test must not depend on real chat ids.
+    gate = _NS(
+        is_primary_group=lambda _chat_id: False,
+        is_infrastructure_chat=lambda _chat_id: True,
     )
+    monkeypatch.setattr(connect_added, "cfg", gate)
+    monkeypatch.setattr(connect_decision, "cfg", gate)
 
     await connect_added.connection.on_join_decision(update)  # type: ignore[arg-type]
 

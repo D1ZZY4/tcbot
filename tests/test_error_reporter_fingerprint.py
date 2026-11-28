@@ -24,14 +24,14 @@ def test_normalize_strips_task_ids_and_addresses() -> None:
 
 def test_normalize_stabilizes_ids_timestamps_and_uuids() -> None:
     text = (
-        "user 7146954165 failed at 2026-11-28T20:19:03.123Z "
+        "user 1000000001 failed at 2026-11-28T20:19:03.123Z "
         "req 550e8400-e29b-41d4-a716-446655440000"
     )
     assert error_reporter._normalize_fp_text(text) == "user #ID failed at #TS req #UUID"
 
 
 def test_volatile_ids_do_not_split_a_fingerprint() -> None:
-    first = error_reporter._fingerprint_record(_record("user 7146954165 blocked"))
+    first = error_reporter._fingerprint_record(_record("user 1000000001 blocked"))
     second = error_reporter._fingerprint_record(_record("user 9867543210 blocked"))
     assert first == second
 

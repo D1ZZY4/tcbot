@@ -60,14 +60,14 @@ def test_primary_group_is_a_federation_origin_without_being_connected(
 
     monkeypatch.setattr(db.groups_db, "is_connected", _must_not_be_called)
     monkeypatch.setattr(
-        guards, "cfg", dataclasses.replace(cfg, main_group=-1002333013065)
+        guards, "cfg", dataclasses.replace(cfg, main_group=-1002000000001)
     )
 
     msg = cast("Any", SimpleNamespace(reply_text=None))
     allowed = asyncio.run(
         require_federation_origin(
             msg,
-            chat_id=-1002333013065,
+            chat_id=-1002000000001,
             chat_type="supergroup",
             locale="en-US",
             allow_private=False,
