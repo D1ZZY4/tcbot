@@ -32,7 +32,7 @@ owns, and how the process comes up. The flows drawn as diagrams are in
 |---|---|
 | `tcbot/__init__.py` | Environment parsing and the immutable `Configs` model. `cfg` is built on first access. |
 | `tcbot/__main__.py` | Application lifecycle, error reporting, handler registration, Kurigram polling transport, and shutdown drains. |
-| `tcbot/alive.py` | Flask keep-alive server with `/health` and `/metrics`. |
+| `tcbot/alive.py` | Flask keep-alive server with `/health` and `/metrics` (the latter only with the observability extra installed). |
 | `tcbot/modules/helper/pipelines/errors/` | Error classification (`classify.py`), exceptions (`exceptions.py`), redaction (`redaction.py`), and report delivery (`report.py`). |
 | `tcbot/modules/helper/pipelines/moderation_enforcement.py` | Deliver queued `apply`, `revoke`, and `reconcile` runs to Telegram. |
 | `tcbot/notification_worker.py` | Retry review-card edits from the durable notification outbox. |
@@ -127,7 +127,7 @@ in `tcbot/modules/helper/pipelines/errors/`. See [Runtime](runtime.md).
 | Service | Owner | Notes |
 |---|---|---|
 | Telegram transport | Single Kurigram client | Native long polling is the only path. |
-| HTTP health | Flask in a daemon thread | Serves only `/`, `/health` and `/metrics`; it never receives Telegram updates. |
+| HTTP health | Flask in a daemon thread | Serves `/`, `/health`, and `/metrics` when the observability extra is installed; it never receives Telegram updates. |
 | PostgreSQL | `database/engine.py` | Every call runs through `db_call` with a circuit breaker and timeout. |
 | Cache | `database/cache/` | In-memory L1 always, optional Redis L2. |
 | Scheduling | `database/scheduler/` | APScheduler with a SQLAlchemy job store; optional pg_cron ownership for database-only jobs. |
